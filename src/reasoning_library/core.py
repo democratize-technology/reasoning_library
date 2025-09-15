@@ -4,8 +4,9 @@ Core utilities for the reasoning library.
 
 import inspect
 import re
+import weakref
 from dataclasses import dataclass, field
-from functools import wraps
+from functools import wraps, lru_cache
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # Security constants and compiled patterns
@@ -30,6 +31,103 @@ COMBINATION_PATTERN = re.compile(
 )
 CLEAN_FACTOR_PATTERN = re.compile(r"[()=\*]+", re.IGNORECASE)
 
+# --- Performance Optimization Caches ---
+
+# Function source code cache using weak references to prevent memory leaks
+_function_source_cache: weakref.WeakKeyDictionary[Callable, str] = weakref.WeakKeyDictionary()
+
+# Mathematical reasoning detection cache using function id for key stability
+_math_detection_cache: Dict[int, Tuple[bool, Optional[str], Optional[str]]] = {}
+
+# Cache size limit to prevent unbounded growth
+_MAX_CACHE_SIZE = 1000
+
+def _get_function_source_cached(func: Callable[..., Any]) -> str:
+    """
+    Get function source code with caching to avoid repeated inspect.getsource() calls.
+
+    Uses weak references to prevent memory leaks while maintaining performance.
+    This optimization targets the 1.92ms overhead in mathematical reasoning detection.
+
+    Args:
+        func: Function to extract source code from
+
+    Returns:
+        str: Function source code (empty string if extraction fails)
+    """
+    # Check cache first (WeakKeyDictionary automatically handles cleanup)
+    if func in _function_source_cache:
+        return _function_source_cache[func]
+
+    # Extract source code (expensive operation we're optimizing)
+    try:
+        source_code = inspect.getsource(func) if hasattr(func, "__code__") else ""
+    except (OSError, TypeError):
+        # Handle dynamic functions, lambdas, and other edge cases gracefully
+        source_code = ""
+
+    # Apply security limit
+    if len(source_code) > MAX_SOURCE_CODE_SIZE:
+        source_code = source_code[:MAX_SOURCE_CODE_SIZE]
+
+    # Cache result (WeakKeyDictionary automatically cleans up when func is GC'd)
+    _function_source_cache[func] = source_code
+    return source_code
+
+def _get_math_detection_cached(func: Callable[..., Any]) -> Tuple[bool, Optional[str], Optional[str]]:
+    """
+    Get mathematical reasoning detection result with caching.
+
+    Uses function id as cache key for stability across calls.
+    Implements LRU-style eviction to prevent unbounded cache growth.
+
+    Args:
+        func: Function to analyze for mathematical reasoning
+
+    Returns:
+        tuple: (is_mathematical, confidence_documentation, mathematical_basis)
+    """
+    func_id = id(func)
+
+    # Check cache first
+    if func_id in _math_detection_cache:
+        return _math_detection_cache[func_id]
+
+    # Perform expensive detection
+    result = _detect_mathematical_reasoning_uncached(func)
+
+    # Implement simple cache size management (LRU-style)
+    if len(_math_detection_cache) >= _MAX_CACHE_SIZE:
+        # Remove oldest entries (simple FIFO approach)
+        # In production, consider using functools.lru_cache or more sophisticated eviction
+        oldest_keys = list(_math_detection_cache.keys())[:_MAX_CACHE_SIZE // 4]
+        for key in oldest_keys:
+            _math_detection_cache.pop(key, None)
+
+    # Cache the result
+    _math_detection_cache[func_id] = result
+    return result
+
+def clear_performance_caches() -> Dict[str, int]:
+    """
+    Clear all performance optimization caches.
+
+    Useful for testing, memory management, or when function definitions change.
+
+    Returns:
+        dict: Statistics about cleared cache entries
+    """
+    source_cache_size = len(_function_source_cache)
+    math_cache_size = len(_math_detection_cache)
+
+    _function_source_cache.clear()
+    _math_detection_cache.clear()
+
+    return {
+        "source_cache_cleared": source_cache_size,
+        "math_detection_cache_cleared": math_cache_size
+    }
+
 # --- Enhanced Tool Registry ---
 
 # Enhanced registry storing functions with rich metadata
@@ -51,7 +149,7 @@ class ToolMetadata:
     confidence_factors: Optional[List[str]] = field(default_factory=list)
 
 
-def _detect_mathematical_reasoning(
+def _detect_mathematical_reasoning_uncached(
     func: Callable[..., Any],
 ) -> Tuple[bool, Optional[str], Optional[str]]:
     """
@@ -95,15 +193,8 @@ def _detect_mathematical_reasoning(
         return False, None, None
 
     # Only extract source code if initial check suggests mathematical reasoning
-    try:
-        source_code = inspect.getsource(func) if hasattr(func, "__code__") else ""
-    except (OSError, TypeError):
-        # Handle dynamic functions, lambdas, and other edge cases gracefully
-        source_code = ""
-
-    # Prevent ReDoS attacks by limiting source code size
-    if len(source_code) > MAX_SOURCE_CODE_SIZE:
-        source_code = source_code[:MAX_SOURCE_CODE_SIZE]  # Truncate to safe size
+    # Use cached source code retrieval for performance optimization
+    source_code = _get_function_source_cached(func)
 
     # Final check including source code
     is_mathematical = any(
@@ -192,6 +283,24 @@ def _detect_mathematical_reasoning(
             mathematical_basis = "Sequential reasoning with conservative confidence aggregation (minimum of step confidences)"
 
     return is_mathematical, confidence_doc, mathematical_basis
+
+
+def _detect_mathematical_reasoning(
+    func: Callable[..., Any],
+) -> Tuple[bool, Optional[str], Optional[str]]:
+    """
+    Detect if a function performs mathematical reasoning with performance optimization.
+
+    This is the optimized version that uses caching to avoid repeated expensive operations.
+    Provides significant performance improvement for repeated function analysis.
+
+    Args:
+        func: Function to analyze for mathematical reasoning patterns
+
+    Returns:
+        tuple: (is_mathematical, confidence_documentation, mathematical_basis)
+    """
+    return _get_math_detection_cached(func)
 
 
 def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
