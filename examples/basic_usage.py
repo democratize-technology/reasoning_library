@@ -8,13 +8,18 @@ described in the README.md file.
 
 import json
 
+from reasoning_library.core import ReasoningChain
+
 # Import core functionality
 from reasoning_library.deductive import apply_modus_ponens
-from reasoning_library.core import ReasoningChain
 
 # Try to import inductive features, but make them optional for now
 try:
-    from reasoning_library.inductive import predict_next_in_sequence, find_pattern_description
+    from reasoning_library.inductive import (
+        find_pattern_description,
+        predict_next_in_sequence,
+    )
+
     INDUCTIVE_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️  Inductive reasoning not available: {e}")
@@ -23,6 +28,7 @@ except ImportError as e:
 # Try to import tool specs, but make them optional
 try:
     from reasoning_library import TOOL_SPECS
+
     TOOL_SPECS_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️  Tool specs not available: {e}")
@@ -42,7 +48,9 @@ def demonstrate_deductive_reasoning() -> None:
 
     chain = ReasoningChain()
 
-    print("Testing Modus Ponens rule: If P is true, and (P -> Q) is true, then Q is true.")
+    print(
+        "Testing Modus Ponens rule: If P is true, and (P -> Q) is true, then Q is true."
+    )
     print()
 
     # Case 1: P=True, Q=True (valid inference)
@@ -71,7 +79,9 @@ def demonstrate_inductive_reasoning() -> None:
 
     # Arithmetic sequence
     seq = [1.0, 2.0, 3.0, 4.0]
-    chain.add_step(stage="Inductive Reasoning", description=f"Analyzing sequence {seq}", result=seq)
+    chain.add_step(
+        stage="Inductive Reasoning", description=f"Analyzing sequence {seq}", result=seq
+    )
 
     pattern = find_pattern_description(seq, reasoning_chain=chain)
     predicted = predict_next_in_sequence(seq, reasoning_chain=chain)
@@ -84,13 +94,17 @@ def demonstrate_inductive_reasoning() -> None:
     print(chain.get_summary())
 
     # Additional example: Geometric sequence
-    print("\n" + "-"*40)
+    print("\n" + "-" * 40)
     print("Additional Example: Geometric Sequence")
-    print("-"*40)
+    print("-" * 40)
 
     chain2 = ReasoningChain()
     geo_seq = [2.0, 4.0, 8.0, 16.0]
-    chain2.add_step(stage="Inductive Reasoning", description=f"Analyzing sequence {geo_seq}", result=geo_seq)
+    chain2.add_step(
+        stage="Inductive Reasoning",
+        description=f"Analyzing sequence {geo_seq}",
+        result=geo_seq,
+    )
 
     geo_pattern = find_pattern_description(geo_seq, reasoning_chain=chain2)
     geo_predicted = predict_next_in_sequence(geo_seq, reasoning_chain=chain2)
@@ -120,8 +134,8 @@ def demonstrate_llm_tool_specs() -> None:
     if TOOL_SPECS:
         print("Available tools:")
         for i, tool in enumerate(TOOL_SPECS, 1):
-            function_name = tool.get('function', {}).get('name', 'Unknown')
-            description = tool.get('function', {}).get('description', 'No description')
+            function_name = tool.get("function", {}).get("name", "Unknown")
+            description = tool.get("function", {}).get("description", "No description")
             print(f"  {i}. {function_name}: {description}")
 
 
@@ -138,7 +152,7 @@ def demonstrate_reasoning_chain_features() -> None:
         result="Problem: Need to find pattern in sequence",
         confidence=0.9,
         evidence="User provided sequence [1, 4, 7, 10]",
-        assumptions=["Sequence is arithmetic", "Pattern continues"]
+        assumptions=["Sequence is arithmetic", "Pattern continues"],
     )
 
     chain.add_step(
@@ -147,7 +161,7 @@ def demonstrate_reasoning_chain_features() -> None:
         result="Arithmetic progression with difference 3",
         confidence=0.95,
         evidence="Differences: 4-1=3, 7-4=3, 10-7=3",
-        assumptions=["Pattern is linear"]
+        assumptions=["Pattern is linear"],
     )
 
     chain.add_step(
@@ -156,7 +170,7 @@ def demonstrate_reasoning_chain_features() -> None:
         result=13,
         confidence=0.95,
         evidence="10 + 3 = 13",
-        assumptions=["Pattern continues unchanged"]
+        assumptions=["Pattern continues unchanged"],
     )
 
     print("Reasoning Chain with detailed metadata:")

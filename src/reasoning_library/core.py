@@ -1,22 +1,33 @@
 """
 Core utilities for the reasoning library.
 """
-from functools import wraps
-from dataclasses import dataclass, field
-from typing import Any, List, Optional, Dict, Callable, Union, Tuple
 import inspect
 import re
+from dataclasses import dataclass, field
+from functools import wraps
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # Security constants and compiled patterns
 MAX_SOURCE_CODE_SIZE = 10000  # Prevent ReDoS attacks by limiting input size
 
 # Pre-compiled regex patterns with ReDoS vulnerability fixes
 # Using more specific patterns to avoid catastrophic backtracking
-FACTOR_PATTERN = re.compile(r'(\w{0,30}(?:data_sufficiency|pattern_quality|complexity)_factor)[\s]{0,5}(?:\*|,|\+|\-|=)', re.IGNORECASE | re.MULTILINE)
-COMMENT_PATTERN = re.compile(r'#\s*(?:Data|Pattern|Complexity)\s+([^#\n]+factor)', re.IGNORECASE | re.MULTILINE)
-EVIDENCE_PATTERN = re.compile(r'f?"[^"]*(?:confidence\s+based\s+on|factors?[\s:]*in)[^"]*([^"\.]+pattern[^"\.]*)', re.IGNORECASE | re.MULTILINE)
-COMBINATION_PATTERN = re.compile(r'(\w{1,30}_factor)[\s]{0,10}\*[\s]{0,10}(\w{1,30}_factor)', re.IGNORECASE | re.MULTILINE)
-CLEAN_FACTOR_PATTERN = re.compile(r'[()=\*]+', re.IGNORECASE)
+FACTOR_PATTERN = re.compile(
+    r"(\w{0,30}(?:data_sufficiency|pattern_quality|complexity)_factor)[\s]{0,5}(?:\*|,|\+|\-|=)",
+    re.IGNORECASE | re.MULTILINE,
+)
+COMMENT_PATTERN = re.compile(
+    r"#\s*(?:Data|Pattern|Complexity)\s+([^#\n]+factor)", re.IGNORECASE | re.MULTILINE
+)
+EVIDENCE_PATTERN = re.compile(
+    r'f?"[^"]*(?:confidence\s+based\s+on|factors?[\s:]*in)[^"]*([^"\.]+pattern[^"\.]*)',
+    re.IGNORECASE | re.MULTILINE,
+)
+COMBINATION_PATTERN = re.compile(
+    r"(\w{1,30}_factor)[\s]{0,10}\*[\s]{0,10}(\w{1,30}_factor)",
+    re.IGNORECASE | re.MULTILINE,
+)
+CLEAN_FACTOR_PATTERN = re.compile(r"[()=\*]+", re.IGNORECASE)
 
 # --- Enhanced Tool Registry ---
 
@@ -26,9 +37,11 @@ ENHANCED_TOOL_REGISTRY: List[Dict[str, Any]] = []
 # Legacy registry for backward compatibility
 TOOL_REGISTRY: List[Callable[..., Any]] = []
 
+
 @dataclass
 class ToolMetadata:
     """Enhanced metadata for tool specifications."""
+
     confidence_documentation: Optional[str] = None
     mathematical_basis: Optional[str] = None
     platform_notes: Optional[Dict[str, str]] = field(default_factory=dict)
@@ -36,7 +49,10 @@ class ToolMetadata:
     confidence_formula: Optional[str] = None
     confidence_factors: Optional[List[str]] = field(default_factory=list)
 
-def _detect_mathematical_reasoning(func: Callable[..., Any]) -> Tuple[bool, Optional[str], Optional[str]]:
+
+def _detect_mathematical_reasoning(
+    func: Callable[..., Any]
+) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Detect if a function performs mathematical reasoning and extract confidence documentation.
 
@@ -47,18 +63,31 @@ def _detect_mathematical_reasoning(func: Callable[..., Any]) -> Tuple[bool, Opti
     """
     # Check for mathematical reasoning indicators
     math_indicators = [
-        'confidence', 'probability', 'statistical', 'variance', 'coefficient_of_variation',
-        'geometric', 'arithmetic', 'progression', 'pattern', 'deductive', 'inductive',
-        'modus_ponens', 'logical', 'reasoning_chain'
+        "confidence",
+        "probability",
+        "statistical",
+        "variance",
+        "coefficient_of_variation",
+        "geometric",
+        "arithmetic",
+        "progression",
+        "pattern",
+        "deductive",
+        "inductive",
+        "modus_ponens",
+        "logical",
+        "reasoning_chain",
     ]
 
     # Fast initial check using only docstring and function name
     docstring = func.__doc__ or ""
-    func_name = getattr(func, '__name__', '')
+    func_name = getattr(func, "__name__", "")
 
     # Quick check without source code extraction
-    has_math_indicators_in_docs = any(indicator in docstring.lower() or indicator in func_name.lower()
-                                     for indicator in math_indicators)
+    has_math_indicators_in_docs = any(
+        indicator in docstring.lower() or indicator in func_name.lower()
+        for indicator in math_indicators
+    )
 
     # If no mathematical indicators in docs/name, likely not mathematical
     if not has_math_indicators_in_docs:
@@ -66,7 +95,7 @@ def _detect_mathematical_reasoning(func: Callable[..., Any]) -> Tuple[bool, Opti
 
     # Only extract source code if initial check suggests mathematical reasoning
     try:
-        source_code = inspect.getsource(func) if hasattr(func, '__code__') else ""
+        source_code = inspect.getsource(func) if hasattr(func, "__code__") else ""
     except (OSError, TypeError):
         # Handle dynamic functions, lambdas, and other edge cases gracefully
         source_code = ""
@@ -76,8 +105,10 @@ def _detect_mathematical_reasoning(func: Callable[..., Any]) -> Tuple[bool, Opti
         source_code = source_code[:MAX_SOURCE_CODE_SIZE]  # Truncate to safe size
 
     # Final check including source code
-    is_mathematical = any(indicator in source_code.lower() or indicator in docstring.lower()
-                         for indicator in math_indicators)
+    is_mathematical = any(
+        indicator in source_code.lower() or indicator in docstring.lower()
+        for indicator in math_indicators
+    )
 
     confidence_doc = None
     mathematical_basis = None
@@ -89,12 +120,16 @@ def _detect_mathematical_reasoning(func: Callable[..., Any]) -> Tuple[bool, Opti
         # Pattern 1: Extract confidence factor variable names using pre-compiled pattern
         factor_matches = FACTOR_PATTERN.findall(source_code)
         if factor_matches:
-            confidence_factors.extend([factor.replace('_', ' ') for factor in factor_matches[:3]])
+            confidence_factors.extend(
+                [factor.replace("_", " ") for factor in factor_matches[:3]]
+            )
 
         # Pattern 2: Extract meaningful descriptive comments using pre-compiled pattern
         comment_matches = COMMENT_PATTERN.findall(source_code)
         if comment_matches:
-            confidence_factors.extend([match.strip().lower() for match in comment_matches[:2]])
+            confidence_factors.extend(
+                [match.strip().lower() for match in comment_matches[:2]]
+            )
 
         # Pattern 3: Extract from evidence strings with confidence calculations using pre-compiled pattern
         evidence_matches = EVIDENCE_PATTERN.findall(source_code)
@@ -107,16 +142,21 @@ def _detect_mathematical_reasoning(func: Callable[..., Any]) -> Tuple[bool, Opti
             # If we haven't found factors yet, use the combination pattern
             factor_names = []
             for match in combination_matches[:2]:
-                factor_names.extend([factor.replace('_factor', '').replace('_', ' ') for factor in match])
+                factor_names.extend(
+                    [
+                        factor.replace("_factor", "").replace("_", " ")
+                        for factor in match
+                    ]
+                )
             confidence_factors.extend(list(set(factor_names)))  # Remove duplicates
 
         # Pattern 5: Extract from docstring confidence patterns
-        if 'confidence' in docstring.lower() and 'based on' in docstring.lower():
+        if "confidence" in docstring.lower() and "based on" in docstring.lower():
             # Look for specific patterns in docstring
-            if 'pattern quality' in docstring.lower():
-                confidence_factors.extend(['pattern quality'])
-            if 'pattern' in docstring.lower() and not confidence_factors:
-                confidence_factors.extend(['pattern analysis'])
+            if "pattern quality" in docstring.lower():
+                confidence_factors.extend(["pattern quality"])
+            if "pattern" in docstring.lower() and not confidence_factors:
+                confidence_factors.extend(["pattern analysis"])
 
         # Create meaningful confidence documentation
         if confidence_factors:
@@ -126,25 +166,32 @@ def _detect_mathematical_reasoning(func: Callable[..., Any]) -> Tuple[bool, Opti
             for factor in confidence_factors:
                 clean_factor = factor.strip().lower()
                 # Remove common code artifacts using pre-compiled pattern
-                clean_factor = CLEAN_FACTOR_PATTERN.sub('', clean_factor).strip()
+                clean_factor = CLEAN_FACTOR_PATTERN.sub("", clean_factor).strip()
                 if clean_factor and clean_factor not in seen and len(clean_factor) > 2:
                     clean_factors.append(clean_factor)
                     seen.add(clean_factor)
 
             if clean_factors:
-                confidence_doc = f"Confidence calculation based on: {', '.join(clean_factors[:3])}"
+                confidence_doc = (
+                    f"Confidence calculation based on: {', '.join(clean_factors[:3])}"
+                )
 
         # Extract mathematical basis from docstring or code
-        if 'arithmetic progression' in docstring.lower():
+        if "arithmetic progression" in docstring.lower():
             mathematical_basis = "Arithmetic progression analysis with data sufficiency and pattern quality factors"
-        elif 'geometric progression' in docstring.lower():
-            mathematical_basis = "Geometric progression analysis with ratio consistency validation"
-        elif 'modus ponens' in docstring.lower():
-            mathematical_basis = "Formal deductive logic using Modus Ponens inference rule"
-        elif 'chain of thought' in docstring.lower():
+        elif "geometric progression" in docstring.lower():
+            mathematical_basis = (
+                "Geometric progression analysis with ratio consistency validation"
+            )
+        elif "modus ponens" in docstring.lower():
+            mathematical_basis = (
+                "Formal deductive logic using Modus Ponens inference rule"
+            )
+        elif "chain of thought" in docstring.lower():
             mathematical_basis = "Sequential reasoning with conservative confidence aggregation (minimum of step confidences)"
 
     return is_mathematical, confidence_doc, mathematical_basis
+
 
 def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -162,23 +209,23 @@ def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(tool_spec, dict):
         raise ValueError("Tool specification must be a dictionary")
 
-    if 'function' not in tool_spec:
+    if "function" not in tool_spec:
         raise ValueError("Tool specification must contain 'function' key")
 
-    if not isinstance(tool_spec['function'], dict):
+    if not isinstance(tool_spec["function"], dict):
         raise ValueError("Tool specification 'function' value must be a dictionary")
 
     # Whitelist of allowed top-level keys to prevent prototype pollution
-    allowed_top_level_keys = {'type', 'function'}
+    allowed_top_level_keys = {"type", "function"}
 
     # Whitelist of allowed function keys
-    allowed_function_keys = {'name', 'description', 'parameters'}
+    allowed_function_keys = {"name", "description", "parameters"}
 
     # Create safe copy with only whitelisted keys
     safe_spec = {}
     for key, value in tool_spec.items():
         if key in allowed_top_level_keys:
-            if key == 'function':
+            if key == "function":
                 # Safely copy function object with whitelisted keys only
                 safe_function = {}
                 for func_key, func_value in value.items():
@@ -189,6 +236,7 @@ def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
                 safe_spec[key] = value
 
     return safe_spec
+
 
 def _openai_format(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -207,9 +255,10 @@ def _openai_format(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
         "function": {
             "name": safe_spec["function"]["name"],
             "description": safe_spec["function"]["description"],
-            "parameters": safe_spec["function"]["parameters"]
-        }
+            "parameters": safe_spec["function"]["parameters"],
+        },
     }
+
 
 def _bedrock_format(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -227,13 +276,14 @@ def _bedrock_format(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
         "toolSpec": {
             "name": safe_spec["function"]["name"],
             "description": safe_spec["function"]["description"],
-            "inputSchema": {
-                "json": safe_spec["function"]["parameters"]
-            }
+            "inputSchema": {"json": safe_spec["function"]["parameters"]},
         }
     }
 
-def _enhance_description_with_confidence_docs(description: str, metadata: ToolMetadata) -> str:
+
+def _enhance_description_with_confidence_docs(
+    description: str, metadata: ToolMetadata
+) -> str:
     """
     Enhance tool description with confidence documentation for mathematical reasoning functions.
 
@@ -268,9 +318,11 @@ def _enhance_description_with_confidence_docs(description: str, metadata: ToolMe
 
     return enhanced_desc
 
+
 def get_tool_specs() -> List[Dict[str, Any]]:
     """Returns a list of all registered tool specifications (legacy format)."""
-    return [getattr(func, 'tool_spec') for func in TOOL_REGISTRY]
+    return [getattr(func, "tool_spec") for func in TOOL_REGISTRY]
+
 
 def get_openai_tools() -> List[Dict[str, Any]]:
     """
@@ -282,13 +334,15 @@ def get_openai_tools() -> List[Dict[str, Any]]:
     openai_tools = []
     for entry in ENHANCED_TOOL_REGISTRY:
         # Create enhanced description using safe copy
-        enhanced_spec = _safe_copy_spec(entry['tool_spec'])
-        enhanced_spec['function']['description'] = _enhance_description_with_confidence_docs(
-            enhanced_spec['function']['description'],
-            entry['metadata']
+        enhanced_spec = _safe_copy_spec(entry["tool_spec"])
+        enhanced_spec["function"][
+            "description"
+        ] = _enhance_description_with_confidence_docs(
+            enhanced_spec["function"]["description"], entry["metadata"]
         )
         openai_tools.append(_openai_format(enhanced_spec))
     return openai_tools
+
 
 def get_bedrock_tools() -> List[Dict[str, Any]]:
     """
@@ -300,13 +354,15 @@ def get_bedrock_tools() -> List[Dict[str, Any]]:
     bedrock_tools = []
     for entry in ENHANCED_TOOL_REGISTRY:
         # Create enhanced description using safe copy
-        enhanced_spec = _safe_copy_spec(entry['tool_spec'])
-        enhanced_spec['function']['description'] = _enhance_description_with_confidence_docs(
-            enhanced_spec['function']['description'],
-            entry['metadata']
+        enhanced_spec = _safe_copy_spec(entry["tool_spec"])
+        enhanced_spec["function"][
+            "description"
+        ] = _enhance_description_with_confidence_docs(
+            enhanced_spec["function"]["description"], entry["metadata"]
         )
         bedrock_tools.append(_bedrock_format(enhanced_spec))
     return bedrock_tools
+
 
 def get_enhanced_tool_registry() -> List[Dict[str, Any]]:
     """
@@ -317,7 +373,9 @@ def get_enhanced_tool_registry() -> List[Dict[str, Any]]:
     """
     return ENHANCED_TOOL_REGISTRY.copy()
 
+
 # --- End Enhanced Tool Registry ---
+
 
 def curry(func: Callable[..., Any]) -> Callable[..., Any]:
     """
@@ -334,7 +392,9 @@ def curry(func: Callable[..., Any]) -> Callable[..., Any]:
             bound = sig.bind(*args, **kwargs)
         except TypeError:
             # If binding fails (insufficient args), return a curried function
-            return lambda *args2, **kwargs2: curried(*(args + args2), **(kwargs | kwargs2))
+            return lambda *args2, **kwargs2: curried(
+                *(args + args2), **(kwargs | kwargs2)
+            )
 
         # If we get here, we have all required arguments - execute the function
         # Any TypeError from the function execution should be propagated, not caught
@@ -342,11 +402,13 @@ def curry(func: Callable[..., Any]) -> Callable[..., Any]:
 
     return curried
 
+
 @dataclass
 class ReasoningStep:
     """
     Represents a single step in a reasoning chain, including its result and metadata.
     """
+
     step_number: int
     stage: str
     description: str
@@ -356,17 +418,26 @@ class ReasoningStep:
     assumptions: Optional[List[str]] = field(default_factory=list)
     metadata: Optional[Dict[str, Any]] = field(default_factory=dict)
 
+
 @dataclass
 class ReasoningChain:
     """
     Manages a sequence of ReasoningStep objects, providing chain-of-thought capabilities.
     """
+
     steps: List[ReasoningStep] = field(default_factory=list)
     _step_counter: int = field(init=False, default=0)
 
-    def add_step(self, stage: str, description: str, result: Any, 
-                 confidence: Optional[float] = None, evidence: Optional[str] = None,
-                 assumptions: Optional[List[str]] = None, metadata: Optional[Dict[str, Any]] = None) -> ReasoningStep:
+    def add_step(
+        self,
+        stage: str,
+        description: str,
+        result: Any,
+        confidence: Optional[float] = None,
+        evidence: Optional[str] = None,
+        assumptions: Optional[List[str]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> ReasoningStep:
         """
         Adds a new reasoning step to the chain.
         """
@@ -379,7 +450,7 @@ class ReasoningChain:
             confidence=confidence,
             evidence=evidence,
             assumptions=assumptions if assumptions is not None else [],
-            metadata=metadata if metadata is not None else {}
+            metadata=metadata if metadata is not None else {},
         )
         self.steps.append(step)
         return step
@@ -390,7 +461,9 @@ class ReasoningChain:
         """
         summary_parts = ["Reasoning Chain Summary:"]
         for step in self.steps:
-            summary_parts.append(f"  Step {step.step_number} ({step.stage}): {step.description}")
+            summary_parts.append(
+                f"  Step {step.step_number} ({step.stage}): {step.description}"
+            )
             summary_parts.append(f"    Result: {step.result}")
             if step.confidence is not None:
                 summary_parts.append(f"    Confidence: {step.confidence:.2f}")
@@ -416,25 +489,27 @@ class ReasoningChain:
         """
         return self.steps[-1].result if self.steps else None
 
+
 # --- Tool Specification Utility ---
 
 TYPE_MAP = {
     bool: "boolean",
     int: "integer",
-float: "number",
+    float: "number",
     str: "string",
     list: "array",
     dict: "object",
-    Any: "object", # Default for Any
+    Any: "object",  # Default for Any
 }
+
 
 def get_json_schema_type(py_type: Any) -> str:
     """
     Converts a Python type hint to a JSON Schema type string.
     Handles Optional and List types.
     """
-    if hasattr(py_type, '__origin__'):
-        if py_type.__origin__ is Union: # Union types (including Optional)
+    if hasattr(py_type, "__origin__"):
+        if py_type.__origin__ is Union:  # Union types (including Optional)
             # Check if this is Optional[X] (Union[X, None])
             args = py_type.__args__
             if len(args) == 2 and type(None) in args:
@@ -443,12 +518,13 @@ def get_json_schema_type(py_type: Any) -> str:
                 return get_json_schema_type(actual_type)
             # For other Union types, default to string
             return "string"
-        elif py_type.__origin__ is list: # List[X]
+        elif py_type.__origin__ is list:  # List[X]
             return "array"
-        elif py_type.__origin__ is dict: # Dict[K, V]
+        elif py_type.__origin__ is dict:  # Dict[K, V]
             return "object"
 
-    return TYPE_MAP.get(py_type, "string") # Default to string if not found
+    return TYPE_MAP.get(py_type, "string")  # Default to string if not found
+
 
 def tool_spec(
     func: Optional[Callable[..., Any]] = None,
@@ -478,16 +554,22 @@ def tool_spec(
         required_params = []
 
         for name, param in signature.parameters.items():
-            if name == 'reasoning_chain':  # Exclude from tool spec
+            if name == "reasoning_chain":  # Exclude from tool spec
                 continue
 
-            param_type = param.annotation if param.annotation is not inspect.Parameter.empty else Any
+            param_type = (
+                param.annotation
+                if param.annotation is not inspect.Parameter.empty
+                else Any
+            )
             json_type = get_json_schema_type(param_type)
 
             param_info: Dict[str, Any] = {"type": json_type}
-            if hasattr(param_type, '__origin__') and param_type.__origin__ is list:
-                if hasattr(param_type, '__args__') and param_type.__args__:
-                    param_info["items"] = {"type": get_json_schema_type(param_type.__args__[0])}
+            if hasattr(param_type, "__origin__") and param_type.__origin__ is list:
+                if hasattr(param_type, "__args__") and param_type.__args__:
+                    param_info["items"] = {
+                        "type": get_json_schema_type(param_type.__args__[0])
+                    }
 
             parameters[name] = param_info
 
@@ -514,7 +596,9 @@ def tool_spec(
         final_mathematical_basis = mathematical_basis
 
         if confidence_factors:
-            confidence_doc = f"Confidence calculation based on: {', '.join(confidence_factors)}"
+            confidence_doc = (
+                f"Confidence calculation based on: {', '.join(confidence_factors)}"
+            )
             is_mathematical = True
 
         # If mathematical_basis is explicitly provided, this is mathematical reasoning
@@ -523,7 +607,11 @@ def tool_spec(
 
         # Fallback to heuristic detection if explicit metadata is not provided
         if not is_mathematical and not final_mathematical_basis:
-            is_mathematical_heuristic, confidence_doc_heuristic, mathematical_basis_heuristic = _detect_mathematical_reasoning(fn)
+            (
+                is_mathematical_heuristic,
+                confidence_doc_heuristic,
+                mathematical_basis_heuristic,
+            ) = _detect_mathematical_reasoning(fn)
             if is_mathematical_heuristic:
                 is_mathematical = True
                 if not confidence_doc:
@@ -531,23 +619,20 @@ def tool_spec(
                 if not final_mathematical_basis:
                     final_mathematical_basis = mathematical_basis_heuristic
 
-
         metadata = ToolMetadata(
             confidence_documentation=confidence_doc,
             mathematical_basis=final_mathematical_basis,
             is_mathematical_reasoning=is_mathematical,
             confidence_formula=confidence_formula,
             confidence_factors=confidence_factors,
-            platform_notes={}
+            platform_notes={},
         )
 
-        ENHANCED_TOOL_REGISTRY.append({
-            'function': wrapper,
-            'tool_spec': tool_specification,
-            'metadata': metadata
-        })
+        ENHANCED_TOOL_REGISTRY.append(
+            {"function": wrapper, "tool_spec": tool_specification, "metadata": metadata}
+        )
 
-        setattr(wrapper, 'tool_spec', tool_specification)
+        setattr(wrapper, "tool_spec", tool_specification)
         TOOL_REGISTRY.append(wrapper)
 
         return wrapper

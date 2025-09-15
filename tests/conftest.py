@@ -4,9 +4,10 @@ Pytest configuration and fixtures for test isolation.
 This module provides fixtures to ensure proper test isolation by resetting
 global state variables that persist between test runs.
 """
-import pytest
 import threading
 from collections import OrderedDict
+
+import pytest
 
 
 @pytest.fixture(autouse=True)
@@ -21,23 +22,33 @@ def reset_global_state():
     """
     # Reset core module global registries
     try:
-        from reasoning_library.core import TOOL_REGISTRY, ENHANCED_TOOL_REGISTRY
+        from reasoning_library.core import ENHANCED_TOOL_REGISTRY, TOOL_REGISTRY
+
         TOOL_REGISTRY.clear()
         ENHANCED_TOOL_REGISTRY.clear()
     except ImportError:
         # Handle case where import path differs
-        from src.reasoning_library.core import TOOL_REGISTRY, ENHANCED_TOOL_REGISTRY
+        from src.reasoning_library.core import ENHANCED_TOOL_REGISTRY, TOOL_REGISTRY
+
         TOOL_REGISTRY.clear()
         ENHANCED_TOOL_REGISTRY.clear()
 
     # Reset chain_of_thought module conversation storage
     try:
-        from reasoning_library.chain_of_thought import _conversations, _conversations_lock
+        from reasoning_library.chain_of_thought import (
+            _conversations,
+            _conversations_lock,
+        )
+
         with _conversations_lock:
             _conversations.clear()
     except ImportError:
         # Handle case where import path differs
-        from src.reasoning_library.chain_of_thought import _conversations, _conversations_lock
+        from src.reasoning_library.chain_of_thought import (
+            _conversations,
+            _conversations_lock,
+        )
+
         with _conversations_lock:
             _conversations.clear()
 
@@ -54,9 +65,9 @@ def clean_tool_registry():
     Use this fixture explicitly in tests that specifically test tool registration.
     """
     try:
-        from reasoning_library.core import TOOL_REGISTRY, ENHANCED_TOOL_REGISTRY
+        from reasoning_library.core import ENHANCED_TOOL_REGISTRY, TOOL_REGISTRY
     except ImportError:
-        from src.reasoning_library.core import TOOL_REGISTRY, ENHANCED_TOOL_REGISTRY
+        from src.reasoning_library.core import ENHANCED_TOOL_REGISTRY, TOOL_REGISTRY
 
     # Clear registries
     TOOL_REGISTRY.clear()
@@ -77,9 +88,15 @@ def clean_conversations():
     Use this fixture explicitly in tests that test conversation management.
     """
     try:
-        from reasoning_library.chain_of_thought import _conversations, _conversations_lock
+        from reasoning_library.chain_of_thought import (
+            _conversations,
+            _conversations_lock,
+        )
     except ImportError:
-        from src.reasoning_library.chain_of_thought import _conversations, _conversations_lock
+        from src.reasoning_library.chain_of_thought import (
+            _conversations,
+            _conversations_lock,
+        )
 
     # Clear conversations
     with _conversations_lock:
@@ -113,17 +130,15 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
     )
-    config.addinivalue_line(
-        "markers", "integration: marks tests as integration tests"
-    )
-    config.addinivalue_line(
-        "markers", "unit: marks tests as unit tests"
-    )
+    config.addinivalue_line("markers", "integration: marks tests as integration tests")
+    config.addinivalue_line("markers", "unit: marks tests as unit tests")
 
 
 def pytest_collection_modifyitems(config, items):
     """Modify test collection to add markers automatically."""
     for item in items:
         # Add 'unit' marker to all tests by default
-        if not any(marker.name in ['integration', 'slow'] for marker in item.iter_markers()):
+        if not any(
+            marker.name in ["integration", "slow"] for marker in item.iter_markers()
+        ):
             item.add_marker(pytest.mark.unit)

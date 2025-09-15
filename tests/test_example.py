@@ -9,15 +9,17 @@ import sys
 try:
     # Test core functionality
     from reasoning_library.core import ReasoningChain, ReasoningStep
+
     print("✅ Core module imported successfully")
 
     # Test deductive reasoning
     from reasoning_library.deductive import apply_modus_ponens
+
     print("✅ Deductive module imported successfully")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("  BASIC FUNCTIONALITY TEST")
-    print("="*60)
+    print("=" * 60)
 
     # Test ReasoningChain
     chain = ReasoningChain()
@@ -25,7 +27,7 @@ try:
         stage="Test",
         description="Testing basic functionality",
         result="Chain works!",
-        confidence=1.0
+        confidence=1.0,
     )
 
     print("\nReasoningChain test:")
@@ -44,11 +46,11 @@ try:
     print(f"\nFinal chain summary:")
     print(chain.get_summary())
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("✅ BASIC TEST COMPLETE - Core functionality works!")
     print("❌ Note: Inductive reasoning unavailable due to numpy issues")
     print("❌ Note: Tool specs unavailable due to dependency issues")
-    print("="*60)
+    print("=" * 60)
 
 except ImportError as e:
     print(f"❌ Import error: {e}")

@@ -7,13 +7,15 @@ with thread-safe conversation management and confidence scoring.
 import re
 import threading
 from collections import OrderedDict
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List, Optional
+
 from .core import ReasoningChain, tool_spec
 
 # Thread-safe conversation management with bounded storage
 _conversations: OrderedDict[str, ReasoningChain] = OrderedDict()
 _conversations_lock = threading.RLock()
 _MAX_CONVERSATIONS = 1000  # Configurable limit to prevent memory DoS
+
 
 def _validate_conversation_id(conversation_id: str) -> str:
     """
@@ -30,9 +32,12 @@ def _validate_conversation_id(conversation_id: str) -> str:
     """
     if not isinstance(conversation_id, str):
         raise ValueError("conversation_id must be a string")
-    if not re.match(r'\A[a-zA-Z0-9_-]{1,64}\Z', conversation_id):
-        raise ValueError("Invalid conversation_id format. Must be 1-64 alphanumeric characters, underscores, or hyphens.")
+    if not re.match(r"\A[a-zA-Z0-9_-]{1,64}\Z", conversation_id):
+        raise ValueError(
+            "Invalid conversation_id format. Must be 1-64 alphanumeric characters, underscores, or hyphens."
+        )
     return conversation_id
+
 
 def _evict_oldest_conversations_if_needed() -> None:
     """
@@ -42,6 +47,7 @@ def _evict_oldest_conversations_if_needed() -> None:
     while len(_conversations) >= _MAX_CONVERSATIONS:
         # Remove the oldest conversation (FIFO/LRU)
         _conversations.popitem(last=False)
+
 
 def _get_or_create_conversation(conversation_id: str) -> ReasoningChain:
     """
@@ -68,6 +74,7 @@ def _get_or_create_conversation(conversation_id: str) -> ReasoningChain:
     _conversations[conversation_id] = ReasoningChain()
     return _conversations[conversation_id]
 
+
 @tool_spec
 def chain_of_thought_step(
     conversation_id: str,
@@ -77,7 +84,7 @@ def chain_of_thought_step(
     confidence: Optional[float] = None,
     evidence: Optional[str] = None,
     assumptions: Optional[List[str]] = None,
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Add a step to a conversation's chain of thought reasoning process.
@@ -106,7 +113,7 @@ def chain_of_thought_step(
             "step_number": -1,
             "conversation_id": conversation_id,
             "success": False,
-            "error": str(e)
+            "error": str(e),
         }
 
     if confidence is None:
@@ -126,15 +133,16 @@ def chain_of_thought_step(
             confidence=confidence,
             evidence=evidence,
             assumptions=assumptions if assumptions is not None else [],
-            metadata=metadata if metadata is not None else {}
+            metadata=metadata if metadata is not None else {},
         )
 
     return {
         "step_number": step.step_number,
         "conversation_id": conversation_id,
         "success": True,
-        "confidence": confidence
+        "confidence": confidence,
     }
+
 
 @tool_spec
 def get_chain_summary(conversation_id: str) -> Dict[str, Any]:
@@ -159,7 +167,7 @@ def get_chain_summary(conversation_id: str) -> Dict[str, Any]:
             "step_count": 0,
             "overall_confidence": 0.0,
             "success": False,
-            "error": str(e)
+            "error": str(e),
         }
 
     with _conversations_lock:
@@ -168,7 +176,7 @@ def get_chain_summary(conversation_id: str) -> Dict[str, Any]:
                 "summary": f"No reasoning chain found for conversation '{conversation_id}'.",
                 "step_count": 0,
                 "overall_confidence": 0.0,
-                "success": False
+                "success": False,
             }
 
         chain = _conversations[conversation_id]
@@ -176,7 +184,9 @@ def get_chain_summary(conversation_id: str) -> Dict[str, Any]:
         # Calculate overall confidence as minimum of all step confidences
         overall_confidence = 1.0  # Start with maximum confidence
         if chain.steps:
-            confidences = [step.confidence for step in chain.steps if step.confidence is not None]
+            confidences = [
+                step.confidence for step in chain.steps if step.confidence is not None
+            ]
             if confidences:
                 overall_confidence = min(confidences)  # Conservative approach
             else:
@@ -189,8 +199,9 @@ def get_chain_summary(conversation_id: str) -> Dict[str, Any]:
             "step_count": len(chain.steps),
             "overall_confidence": overall_confidence,
             "conversation_id": conversation_id,
-            "success": True
+            "success": True,
         }
+
 
 @tool_spec
 def clear_chain(conversation_id: str) -> Dict[str, Any]:
@@ -214,7 +225,7 @@ def clear_chain(conversation_id: str) -> Dict[str, Any]:
             "conversation_id": conversation_id,
             "steps_removed": 0,
             "success": False,
-            "error": str(e)
+            "error": str(e),
         }
 
     with _conversations_lock:
@@ -227,15 +238,16 @@ def clear_chain(conversation_id: str) -> Dict[str, Any]:
                 "message": f"Cleared reasoning chain for conversation '{conversation_id}' ({step_count} steps removed).",
                 "conversation_id": conversation_id,
                 "steps_removed": step_count,
-                "success": True
+                "success": True,
             }
         else:
             return {
                 "message": f"No reasoning chain found for conversation '{conversation_id}' to clear.",
                 "conversation_id": conversation_id,
                 "steps_removed": 0,
-                "success": False
+                "success": False,
             }
+
 
 def get_active_conversations() -> List[str]:
     """
@@ -249,6 +261,7 @@ def get_active_conversations() -> List[str]:
     with _conversations_lock:
         return list(_conversations.keys())
 
+
 def get_conversation_stats() -> Dict[str, Any]:
     """
     Get statistics about all active conversations.
@@ -261,17 +274,19 @@ def get_conversation_stats() -> Dict[str, Any]:
     with _conversations_lock:
         stats: Dict[str, Any] = {
             "total_conversations": len(_conversations),
-            "conversation_details": {}
+            "conversation_details": {},
         }
 
         for conv_id, chain in _conversations.items():
-            confidences = [step.confidence for step in chain.steps if step.confidence is not None]
+            confidences = [
+                step.confidence for step in chain.steps if step.confidence is not None
+            ]
             overall_confidence = min(confidences) if confidences else 0.0
 
             stats["conversation_details"][conv_id] = {
                 "step_count": len(chain.steps),
                 "overall_confidence": overall_confidence,
-                "last_result": chain.last_result
+                "last_result": chain.last_result,
             }
 
         return stats

@@ -5,21 +5,29 @@ Comprehensive test suite for chain_of_thought.py module.
 Tests thread-safe conversation management, confidence scoring,
 validation, and concurrent access patterns.
 """
-import sys
 import os
+import sys
 import threading
 import time
-import pytest
 from unittest.mock import patch
 
+import pytest
+
 from reasoning_library.chain_of_thought import (
-    chain_of_thought_step, get_chain_summary, clear_chain,
-    get_active_conversations, get_conversation_stats,
-    _validate_conversation_id, _get_or_create_conversation,
+    _MAX_CONVERSATIONS,
+    _conversations,
+    _conversations_lock,
     _evict_oldest_conversations_if_needed,
-    _conversations, _conversations_lock, _MAX_CONVERSATIONS
+    _get_or_create_conversation,
+    _validate_conversation_id,
+    chain_of_thought_step,
+    clear_chain,
+    get_active_conversations,
+    get_chain_summary,
+    get_conversation_stats,
 )
 from reasoning_library.core import ReasoningChain, ReasoningStep
+
 
 class TestConversationIdValidation:
     """Test conversation ID validation and security."""
@@ -33,7 +41,7 @@ class TestConversationIdValidation:
             "a",
             "A1b2C3d4",
             "test_conv_2024",
-            "session-uuid-1234567890123456789012345678901234567890123456789012"[:64]
+            "session-uuid-1234567890123456789012345678901234567890123456789012"[:64],
         ]
 
         for conv_id in valid_ids:
@@ -63,7 +71,10 @@ class TestConversationIdValidation:
         ]
 
         for conv_id in invalid_ids:
-            with pytest.raises(ValueError, match="Invalid conversation_id format|conversation_id must be a string"):
+            with pytest.raises(
+                ValueError,
+                match="Invalid conversation_id format|conversation_id must be a string",
+            ):
                 _validate_conversation_id(conv_id)
 
     def test_conversation_id_injection_protection(self):
@@ -82,6 +93,7 @@ class TestConversationIdValidation:
             with pytest.raises(ValueError):
                 _validate_conversation_id(malicious_id)
 
+
 class TestChainOfThoughtStep:
     """Test chain_of_thought_step function."""
 
@@ -96,7 +108,7 @@ class TestChainOfThoughtStep:
             conversation_id="test_conv",
             stage="Analysis",
             description="Initial analysis",
-            result="analysis complete"
+            result="analysis complete",
         )
 
         assert result["success"] == True
@@ -120,7 +132,7 @@ class TestChainOfThoughtStep:
             stage="Analysis",
             description="High confidence analysis",
             result="confident result",
-            confidence=0.95
+            confidence=0.95,
         )
 
         assert result["success"] == True
@@ -143,7 +155,7 @@ class TestChainOfThoughtStep:
             confidence=0.75,
             evidence="Strong supporting evidence",
             assumptions=assumptions,
-            metadata=metadata
+            metadata=metadata,
         )
 
         assert result["success"] == True
@@ -164,7 +176,7 @@ class TestChainOfThoughtStep:
             stage="Analysis",
             description="Over-confident step",
             result="result",
-            confidence=1.5
+            confidence=1.5,
         )
 
         assert result["confidence"] == 1.0
@@ -175,7 +187,7 @@ class TestChainOfThoughtStep:
             stage="Analysis",
             description="Under-confident step",
             result="result",
-            confidence=-0.5
+            confidence=-0.5,
         )
 
         assert result["confidence"] == 0.0
@@ -189,7 +201,7 @@ class TestChainOfThoughtStep:
             conversation_id=conv_id,
             stage="Analysis",
             description="Step 1",
-            result="result1"
+            result="result1",
         )
 
         # Add second step
@@ -197,7 +209,7 @@ class TestChainOfThoughtStep:
             conversation_id=conv_id,
             stage="Synthesis",
             description="Step 2",
-            result="result2"
+            result="result2",
         )
 
         assert result1["step_number"] == 1
@@ -215,13 +227,14 @@ class TestChainOfThoughtStep:
             conversation_id="invalid id with spaces",
             stage="Analysis",
             description="This should fail",
-            result="should not work"
+            result="should not work",
         )
 
         assert result["success"] == False
         assert result["step_number"] == -1
         assert "error" in result
         assert "Invalid conversation_id format" in result["error"]
+
 
 class TestGetChainSummary:
     """Test get_chain_summary function."""
@@ -238,7 +251,9 @@ class TestGetChainSummary:
         # Add some steps
         chain_of_thought_step(conv_id, "Analysis", "Step 1", "result1", confidence=0.9)
         chain_of_thought_step(conv_id, "Synthesis", "Step 2", "result2", confidence=0.8)
-        chain_of_thought_step(conv_id, "Conclusion", "Step 3", "result3", confidence=0.95)
+        chain_of_thought_step(
+            conv_id, "Conclusion", "Step 3", "result3", confidence=0.95
+        )
 
         result = get_chain_summary(conv_id)
 
@@ -310,6 +325,7 @@ class TestGetChainSummary:
         assert "Invalid conversation ID" in result["summary"]
         assert "error" in result
 
+
 class TestClearChain:
     """Test clear_chain function."""
 
@@ -360,6 +376,7 @@ class TestClearChain:
         assert "Invalid conversation ID" in result["message"]
         assert "error" in result
 
+
 class TestThreadSafety:
     """Test thread safety of conversation management."""
 
@@ -383,7 +400,7 @@ class TestThreadSafety:
                         conversation_id=conv_id,
                         stage=f"Stage_{i}",
                         description=f"Step {i} from thread {thread_id}",
-                        result=f"result_{thread_id}_{i}"
+                        result=f"result_{thread_id}_{i}",
                     )
                     results.append(result)
                     time.sleep(0.001)  # Small delay to encourage race conditions
@@ -428,7 +445,7 @@ class TestThreadSafety:
                         conversation_id=conv_id,
                         stage=f"Thread{thread_id}",
                         description=f"Step {i} from thread {thread_id}",
-                        result=f"result_{thread_id}_{i}"
+                        result=f"result_{thread_id}_{i}",
                     )
                     results.append(result["step_number"])
                     time.sleep(0.001)
@@ -471,7 +488,7 @@ class TestThreadSafety:
                         conversation_id=conv_id,
                         stage="Addition",
                         description=f"Adding step {i}",
-                        result=f"result_{i}"
+                        result=f"result_{i}",
                     )
                     time.sleep(0.001)
             except Exception as e:
@@ -497,6 +514,7 @@ class TestThreadSafety:
         # Should not have any errors (operations should be thread-safe)
         assert len(errors) == 0, f"Errors occurred: {errors}"
 
+
 class TestMemoryManagement:
     """Test memory management and conversation limits."""
 
@@ -509,6 +527,7 @@ class TestMemoryManagement:
         """Test that old conversations are evicted when limit is reached."""
         # Mock the limit to a small number for testing
         import reasoning_library.chain_of_thought as cot_module
+
         original_limit = cot_module._MAX_CONVERSATIONS
 
         try:
@@ -517,7 +536,9 @@ class TestMemoryManagement:
 
             # Add conversations up to the limit
             for i in range(3):
-                chain_of_thought_step(f"conv_{i}", "Stage", "Description", f"result_{i}")
+                chain_of_thought_step(
+                    f"conv_{i}", "Stage", "Description", f"result_{i}"
+                )
 
             with _conversations_lock:
                 assert len(_conversations) == 3
@@ -558,6 +579,7 @@ class TestMemoryManagement:
             # Most recently accessed should be at the end
             assert conversation_keys[-1] == "conv_2"  # Most recent (step added)
 
+
 class TestUtilityFunctions:
     """Test utility functions for monitoring and debugging."""
 
@@ -586,7 +608,9 @@ class TestUtilityFunctions:
         chain_of_thought_step("conv_1", "Stage", "Step 1", "result_1", confidence=0.9)
         chain_of_thought_step("conv_1", "Stage", "Step 2", "result_2", confidence=0.8)
 
-        chain_of_thought_step("conv_2", "Stage", "Single step", "result", confidence=0.95)
+        chain_of_thought_step(
+            "conv_2", "Stage", "Single step", "result", confidence=0.95
+        )
 
         stats = get_conversation_stats()
 
@@ -604,6 +628,7 @@ class TestUtilityFunctions:
         assert conv_2_stats["overall_confidence"] == 0.95
         assert conv_2_stats["last_result"] == "result"
 
+
 def run_all_tests():
     """Run all chain of thought tests with detailed output."""
     print("🧪 Running comprehensive test suite for chain_of_thought.py...")
@@ -615,7 +640,7 @@ def run_all_tests():
         TestClearChain,
         TestThreadSafety,
         TestMemoryManagement,
-        TestUtilityFunctions
+        TestUtilityFunctions,
     ]
 
     total_tests = 0
@@ -625,13 +650,15 @@ def run_all_tests():
     for test_class in test_classes:
         print(f"\n📝 Testing {test_class.__name__}...")
 
-        test_methods = [method for method in dir(test_class) if method.startswith('test_')]
+        test_methods = [
+            method for method in dir(test_class) if method.startswith("test_")
+        ]
 
         for method_name in test_methods:
             total_tests += 1
             try:
                 instance = test_class()
-                if hasattr(instance, 'setup_method'):
+                if hasattr(instance, "setup_method"):
                     instance.setup_method()
 
                 method = getattr(instance, method_name)
@@ -657,6 +684,7 @@ def run_all_tests():
     else:
         print(f"\n🎉 All chain of thought tests passed!")
         return True
+
 
 if __name__ == "__main__":
     success = run_all_tests()

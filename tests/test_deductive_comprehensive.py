@@ -5,20 +5,28 @@ Comprehensive test suite for deductive.py module.
 Expands beyond the basic test_deductive_only.py to cover all logical operations,
 edge cases, error conditions, currying functionality, and confidence scoring.
 """
-import sys
 import os
-import pytest
+import sys
 from unittest.mock import MagicMock
 
-from reasoning_library.deductive import (
-    logical_not, logical_not_with_confidence,
-    logical_and, logical_and_with_confidence,
-    logical_or, logical_or_with_confidence,
-    implies, implies_with_confidence,
-    check_modus_ponens_premises, check_modus_ponens_premises_with_confidence,
-    apply_modus_ponens, chain_deductions
-)
+import pytest
+
 from reasoning_library.core import ReasoningChain, ReasoningStep
+from reasoning_library.deductive import (
+    apply_modus_ponens,
+    chain_deductions,
+    check_modus_ponens_premises,
+    check_modus_ponens_premises_with_confidence,
+    implies,
+    implies_with_confidence,
+    logical_and,
+    logical_and_with_confidence,
+    logical_not,
+    logical_not_with_confidence,
+    logical_or,
+    logical_or_with_confidence,
+)
+
 
 class TestLogicalPrimitives:
     """Test basic logical operations and their confidence scoring."""
@@ -62,7 +70,7 @@ class TestLogicalPrimitives:
             (True, True, True, 1.0),
             (True, False, False, 1.0),
             (False, True, False, 1.0),
-            (False, False, False, 1.0)
+            (False, False, False, 1.0),
         ]
 
         for p, q, expected_result, expected_confidence in test_cases:
@@ -97,7 +105,7 @@ class TestLogicalPrimitives:
             (True, True, True, 1.0),
             (True, False, True, 1.0),
             (False, True, True, 1.0),
-            (False, False, False, 1.0)
+            (False, False, False, 1.0),
         ]
 
         for p, q, expected_result, expected_confidence in test_cases:
@@ -116,18 +124,18 @@ class TestLogicalPrimitives:
     def test_implies_basic(self):
         """Test basic logical IMPLICATION operation."""
         # P -> Q is equivalent to (NOT P) OR Q
-        assert implies(True, True) == True   # True -> True = True
-        assert implies(True, False) == False # True -> False = False
+        assert implies(True, True) == True  # True -> True = True
+        assert implies(True, False) == False  # True -> False = False
         assert implies(False, True) == True  # False -> True = True
-        assert implies(False, False) == True # False -> False = True
+        assert implies(False, False) == True  # False -> False = True
 
     def test_implies_with_confidence_all_combinations(self):
         """Test logical IMPLICATION with confidence for all truth combinations."""
         test_cases = [
-            (True, True, True, 1.0),    # True -> True = True
+            (True, True, True, 1.0),  # True -> True = True
             (True, False, False, 1.0),  # True -> False = False
-            (False, True, True, 1.0),   # False -> True = True
-            (False, False, True, 1.0)   # False -> False = True
+            (False, True, True, 1.0),  # False -> True = True
+            (False, False, True, 1.0),  # False -> False = True
         ]
 
         for p, q, expected_result, expected_confidence in test_cases:
@@ -142,6 +150,7 @@ class TestLogicalPrimitives:
 
         with pytest.raises(TypeError, match="Expected bool for q, got"):
             implies_with_confidence(True, "not a bool")
+
 
 class TestCurryingFunctionality:
     """Test currying functionality of logical operations."""
@@ -184,6 +193,7 @@ class TestCurryingFunctionality:
         assert callable(implies_from_false)
         assert implies_from_false(True) == True
         assert implies_from_false(False) == True
+
 
 class TestModusPonens:
     """Test Modus Ponens inference rule implementation."""
@@ -285,6 +295,7 @@ class TestModusPonens:
         assert len(step.assumptions) > 0
         assert "Propositions P and (P -> Q) are true" in step.assumptions
 
+
 class TestChainDeductions:
     """Test higher-order function for chaining deductions."""
 
@@ -323,7 +334,9 @@ class TestChainDeductions:
             return x * 100
 
         # Chain with a failing function
-        chained_func = chain_deductions(chain, always_succeed, always_fail, never_reached)
+        chained_func = chain_deductions(
+            chain, always_succeed, always_fail, never_reached
+        )
 
         result = chained_func(5)
         assert result is None  # Should fail at always_fail
@@ -347,16 +360,20 @@ class TestChainDeductions:
         result = chained_func(5)
         assert result == 10
 
+
 class TestConfidenceScoring:
     """Test confidence scoring edge cases and boundary conditions."""
 
     def test_confidence_always_one_for_logical_operations(self):
         """Test that logical operations always return confidence 1.0."""
         operations = [
-            (logical_and_with_confidence, [(True, True), (True, False), (False, False)]),
+            (
+                logical_and_with_confidence,
+                [(True, True), (True, False), (False, False)],
+            ),
             (logical_or_with_confidence, [(True, True), (True, False), (False, False)]),
             (implies_with_confidence, [(True, True), (True, False), (False, False)]),
-            (logical_not_with_confidence, [(True,), (False,)])
+            (logical_not_with_confidence, [(True,), (False,)]),
         ]
 
         for operation, test_cases in operations:
@@ -365,7 +382,9 @@ class TestConfidenceScoring:
                     result, confidence = operation(args[0])
                 else:
                     result, confidence = operation(args[0], args[1])
-                assert confidence == 1.0, f"Expected confidence 1.0 for {operation.__name__} with args {args}"
+                assert (
+                    confidence == 1.0
+                ), f"Expected confidence 1.0 for {operation.__name__} with args {args}"
 
     def test_modus_ponens_confidence_extremes(self):
         """Test Modus Ponens confidence in extreme cases."""
@@ -388,24 +407,25 @@ class TestConfidenceScoring:
         apply_modus_ponens(False, False, reasoning_chain=chain)
         assert chain.steps[0].confidence == 0.0
 
+
 class TestEdgeCasesAndErrorHandling:
     """Test edge cases and error handling scenarios."""
 
     def test_tool_spec_metadata(self):
         """Test that apply_modus_ponens has proper tool spec metadata."""
         # Check that the function has tool spec attached
-        assert hasattr(apply_modus_ponens, 'tool_spec')
+        assert hasattr(apply_modus_ponens, "tool_spec")
 
         spec = apply_modus_ponens.tool_spec
-        assert spec['type'] == 'function'
-        assert spec['function']['name'] == 'apply_modus_ponens'
-        assert 'Modus Ponens' in spec['function']['description']
+        assert spec["type"] == "function"
+        assert spec["function"]["name"] == "apply_modus_ponens"
+        assert "Modus Ponens" in spec["function"]["description"]
 
         # Check parameters
-        params = spec['function']['parameters']
-        assert 'p_is_true' in params['properties']
-        assert 'p_implies_q_is_true' in params['properties']
-        assert 'reasoning_chain' not in params['properties']  # Should be excluded
+        params = spec["function"]["parameters"]
+        assert "p_is_true" in params["properties"]
+        assert "p_implies_q_is_true" in params["properties"]
+        assert "reasoning_chain" not in params["properties"]  # Should be excluded
 
     def test_reasoning_chain_integration(self):
         """Test integration with ReasoningChain for step tracking."""
@@ -463,6 +483,7 @@ class TestEdgeCasesAndErrorHandling:
         assert result3 == False
         assert result4 == False
 
+
 def run_all_tests():
     """Run all deductive reasoning tests with detailed output."""
     print("🧪 Running comprehensive test suite for deductive.py...")
@@ -473,7 +494,7 @@ def run_all_tests():
         TestModusPonens,
         TestChainDeductions,
         TestConfidenceScoring,
-        TestEdgeCasesAndErrorHandling
+        TestEdgeCasesAndErrorHandling,
     ]
 
     total_tests = 0
@@ -483,13 +504,15 @@ def run_all_tests():
     for test_class in test_classes:
         print(f"\n📝 Testing {test_class.__name__}...")
 
-        test_methods = [method for method in dir(test_class) if method.startswith('test_')]
+        test_methods = [
+            method for method in dir(test_class) if method.startswith("test_")
+        ]
 
         for method_name in test_methods:
             total_tests += 1
             try:
                 instance = test_class()
-                if hasattr(instance, 'setup_method'):
+                if hasattr(instance, "setup_method"):
                     instance.setup_method()
 
                 method = getattr(instance, method_name)
@@ -515,6 +538,7 @@ def run_all_tests():
     else:
         print(f"\n🎉 All deductive reasoning tests passed!")
         return True
+
 
 if __name__ == "__main__":
     success = run_all_tests()
