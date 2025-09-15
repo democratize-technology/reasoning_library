@@ -5,6 +5,8 @@ Enhanced tool specification system supporting AWS Bedrock and OpenAI compatibili
 with automatic confidence documentation for mathematical reasoning functions.
 """
 
+__version__ = "0.1.0"
+
 from typing import Any, Dict, List
 
 from .chain_of_thought import chain_of_thought_step, clear_chain, get_chain_summary
