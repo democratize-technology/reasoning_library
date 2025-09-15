@@ -1,0 +1,22 @@
+# Global code owners
+* @reasoning-library/maintainers
+
+# CI/CD workflows require security review
+/.github/workflows/ @reasoning-library/maintainers @reasoning-library/security
+
+# Package configuration requires maintainer approval
+/pyproject.toml @reasoning-library/maintainers
+/uv.lock @reasoning-library/maintainers
+
+# Security-sensitive files require security team review
+/.github/dependabot.yml @reasoning-library/security
+/.github/workflows/security.yml @reasoning-library/security
+/.github/workflows/release.yml @reasoning-library/maintainers @reasoning-library/security
+
+# Documentation requires maintainer review
+/docs/ @reasoning-library/maintainers
+/README.md @reasoning-library/maintainers
+/CHANGELOG.md @reasoning-library/maintainers
+
+# Core library code requires maintainer review
+/src/reasoning_library/ @reasoning-library/maintainers

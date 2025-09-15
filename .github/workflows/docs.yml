@@ -1,0 +1,453 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'pyproject.toml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'pyproject.toml'
+  workflow_dispatch:
+
+env:
+  UV_CACHE_DIR: /tmp/.uv-cache
+
+jobs:
+  # Build API documentation
+  build-docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache uv dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-docs-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-docs-${{ runner.os }}-
+            uv-${{ runner.os }}-
+
+      - name: Install dependencies and docs tools
+        run: |
+          uv sync --dev
+          uv add sphinx sphinx-rtd-theme sphinx-autodoc-typehints myst-parser --dev
+
+      - name: Create docs directory structure
+        run: |
+          mkdir -p docs/source
+          mkdir -p docs/build
+
+      - name: Generate Sphinx configuration
+        run: |
+          cat > docs/source/conf.py << 'EOF'
+          import os
+          import sys
+          sys.path.insert(0, os.path.abspath('../../src'))
+
+          # Project information
+          project = 'reasoning-library'
+          copyright = '2024, reasoning-library contributors'
+          author = 'reasoning-library contributors'
+
+          # Version information
+          import tomllib
+          with open('../../pyproject.toml', 'rb') as f:
+              pyproject_data = tomllib.load(f)
+              version = pyproject_data['project']['version']
+              release = version
+
+          # Extensions
+          extensions = [
+              'sphinx.ext.autodoc',
+              'sphinx.ext.autosummary',
+              'sphinx.ext.viewcode',
+              'sphinx.ext.napoleon',
+              'sphinx.ext.intersphinx',
+              'sphinx_autodoc_typehints',
+              'myst_parser',
+          ]
+
+          # Autodoc settings
+          autodoc_default_options = {
+              'members': True,
+              'member-order': 'bysource',
+              'special-members': '__init__',
+              'undoc-members': True,
+              'exclude-members': '__weakref__'
+          }
+
+          autosummary_generate = True
+          autodoc_typehints = 'description'
+
+          # Napoleon settings
+          napoleon_google_docstring = True
+          napoleon_numpy_docstring = True
+          napoleon_include_init_with_doc = False
+          napoleon_include_private_with_doc = False
+
+          # Theme
+          html_theme = 'sphinx_rtd_theme'
+          html_theme_options = {
+              'canonical_url': '',
+              'analytics_id': '',
+              'logo_only': False,
+              'display_version': True,
+              'prev_next_buttons_location': 'bottom',
+              'style_external_links': False,
+              'collapse_navigation': True,
+              'sticky_navigation': True,
+              'navigation_depth': 4,
+              'includehidden': True,
+              'titles_only': False
+          }
+
+          # Static files
+          html_static_path = ['_static']
+
+          # Source suffix
+          source_suffix = {
+              '.rst': None,
+              '.md': 'myst_parser',
+          }
+
+          # Master doc
+          master_doc = 'index'
+
+          # Intersphinx
+          intersphinx_mapping = {
+              'python': ('https://docs.python.org/3', None),
+              'numpy': ('https://numpy.org/doc/stable/', None),
+          }
+          EOF
+
+      - name: Generate API documentation index
+        run: |
+          cat > docs/source/index.rst << 'EOF'
+          reasoning-library Documentation
+          =============================
+
+          A Python library for formal reasoning methods with LLM integration.
+
+          .. toctree::
+             :maxdepth: 2
+             :caption: Contents:
+
+             overview
+             api
+             examples
+
+          Installation
+          -----------
+
+          .. code-block:: bash
+
+             pip install reasoning-library
+
+          Quick Start
+          ----------
+
+          .. code-block:: python
+
+             import reasoning_library
+             # Your code here
+
+          API Reference
+          ------------
+
+          .. autosummary::
+             :toctree: _autosummary
+             :recursive:
+
+             reasoning_library
+
+          Indices and tables
+          ==================
+
+          * :ref:`genindex`
+          * :ref:`modindex`
+          * :ref:`search`
+          EOF
+
+      - name: Generate overview page
+        run: |
+          cat > docs/source/overview.md << 'EOF'
+          # Overview
+
+          The reasoning-library is a Python package that provides formal reasoning methods with LLM integration.
+
+          ## Features
+
+          - Formal reasoning methods
+          - LLM integration
+          - Type-safe implementation
+          - Comprehensive testing
+
+          ## Architecture
+
+          The library is organized into several key modules:
+
+          - `reasoning_library.core` - Core reasoning functionality
+          - `reasoning_library.logic` - Logic operations
+          - `reasoning_library.utils` - Utility functions
+
+          ## Requirements
+
+          - Python 3.10+
+          - NumPy 1.24.0+
+          EOF
+
+      - name: Generate API documentation page
+        run: |
+          cat > docs/source/api.rst << 'EOF'
+          API Reference
+          =============
+
+          This page contains the API reference for reasoning-library.
+
+          Core Module
+          -----------
+
+          .. automodule:: reasoning_library.core
+             :members:
+             :undoc-members:
+             :show-inheritance:
+
+          Logic Module
+          ------------
+
+          .. automodule:: reasoning_library.logic
+             :members:
+             :undoc-members:
+             :show-inheritance:
+
+          Utilities
+          ---------
+
+          .. automodule:: reasoning_library.utils
+             :members:
+             :undoc-members:
+             :show-inheritance:
+          EOF
+
+      - name: Generate examples page
+        run: |
+          cat > docs/source/examples.md << 'EOF'
+          # Examples
+
+          This page contains usage examples for reasoning-library.
+
+          ## Basic Usage
+
+          ```python
+          import reasoning_library
+
+          # Example usage here
+          ```
+
+          ## Advanced Examples
+
+          More complex examples will be added as the library develops.
+          EOF
+
+      - name: Create static directory
+        run: |
+          mkdir -p docs/source/_static
+          echo "/* Custom CSS */" > docs/source/_static/custom.css
+
+      - name: Build documentation
+        run: |
+          cd docs
+          uv run sphinx-build -b html source build/html -W --keep-going
+
+      - name: Test documentation build
+        run: |
+          # Check that essential files were created
+          test -f docs/build/html/index.html
+          test -f docs/build/html/api.html
+          test -f docs/build/html/overview.html
+
+          echo "## Documentation Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Documentation built successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Count generated pages
+          PAGE_COUNT=$(find docs/build/html -name "*.html" | wc -l)
+          echo "📄 Generated $PAGE_COUNT HTML pages" >> $GITHUB_STEP_SUMMARY
+
+          # Check for warnings in build log
+          if [ -f docs/build.log ]; then
+            WARNING_COUNT=$(grep -c "warning" docs/build.log || echo "0")
+            echo "⚠️  Build warnings: $WARNING_COUNT" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload documentation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: docs/build/html/
+          retention-days: 30
+
+  # Deploy documentation to GitHub Pages
+  deploy-docs:
+    name: Deploy Documentation
+    runs-on: ubuntu-latest
+    needs: build-docs
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download documentation
+        uses: actions/download-artifact@v4
+        with:
+          name: documentation
+          path: docs/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload to GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Deployment summary
+        run: |
+          echo "## 📚 Documentation Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Documentation has been deployed to GitHub Pages:" >> $GITHUB_STEP_SUMMARY
+          echo "🔗 ${{ steps.deployment.outputs.page_url }}" >> $GITHUB_STEP_SUMMARY
+
+  # Check documentation quality
+  docs-quality:
+    name: Documentation Quality Check
+    runs-on: ubuntu-latest
+    needs: build-docs
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download documentation
+        uses: actions/download-artifact@v4
+        with:
+          name: documentation
+          path: docs/
+
+      - name: Install documentation checkers
+        run: |
+          pip install html5lib beautifulsoup4 requests
+
+      - name: Validate HTML
+        run: |
+          python << 'EOF'
+          import html5lib
+          import os
+          from pathlib import Path
+
+          errors = 0
+          html_files = list(Path("docs").rglob("*.html"))
+
+          print(f"Validating {len(html_files)} HTML files...")
+
+          for html_file in html_files:
+              try:
+                  with open(html_file, 'r', encoding='utf-8') as f:
+                      content = f.read()
+                      parser = html5lib.HTMLParser(strict=True)
+                      parser.parse(content)
+                  print(f"✅ {html_file}")
+              except Exception as e:
+                  print(f"❌ {html_file}: {e}")
+                  errors += 1
+
+          print(f"\nValidation complete. Errors: {errors}")
+          if errors > 0:
+              exit(1)
+          EOF
+
+      - name: Check for broken internal links
+        run: |
+          python << 'EOF'
+          from bs4 import BeautifulSoup
+          from pathlib import Path
+          import urllib.parse
+
+          broken_links = []
+          html_files = list(Path("docs").rglob("*.html"))
+          existing_files = {f.name for f in html_files}
+
+          for html_file in html_files:
+              with open(html_file, 'r', encoding='utf-8') as f:
+                  soup = BeautifulSoup(f.read(), 'html.parser')
+
+              for link in soup.find_all('a', href=True):
+                  href = link['href']
+                  if href.startswith('http') or href.startswith('#'):
+                      continue  # Skip external links and anchors
+
+                  # Check if internal link exists
+                  if href.endswith('.html') and href not in existing_files:
+                      broken_links.append(f"{html_file}: {href}")
+
+          if broken_links:
+              print("❌ Broken internal links found:")
+              for link in broken_links:
+                  print(f"  {link}")
+              exit(1)
+          else:
+              print("✅ No broken internal links found")
+          EOF
+
+      - name: Documentation metrics
+        run: |
+          echo "## 📊 Documentation Metrics" >> $GITHUB_STEP_SUMMARY
+
+          # Count documentation coverage
+          TOTAL_MODULES=$(find src/ -name "*.py" -not -name "__init__.py" | wc -l)
+          DOC_PAGES=$(find docs/ -name "*.html" -not -name "index.html" | wc -l)
+
+          echo "📁 Python modules: $TOTAL_MODULES" >> $GITHUB_STEP_SUMMARY
+          echo "📄 Documentation pages: $DOC_PAGES" >> $GITHUB_STEP_SUMMARY
+
+          # File sizes
+          TOTAL_SIZE=$(du -sh docs/ | cut -f1)
+          echo "💾 Total documentation size: $TOTAL_SIZE" >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Documentation quality checks passed" >> $GITHUB_STEP_SUMMARY

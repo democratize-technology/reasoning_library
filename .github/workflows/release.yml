@@ -1,0 +1,333 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"  # Semantic versioning tags
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 1.0.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Is this a pre-release?'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  UV_CACHE_DIR: /tmp/.uv-cache
+
+jobs:
+  # Pre-release validation
+  validate-release:
+    name: Validate Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is-prerelease: ${{ steps.version.outputs.is-prerelease }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+            IS_PRERELEASE="${{ github.event.inputs.prerelease }}"
+          else
+            # Extract version from tag
+            VERSION=${GITHUB_REF#refs/tags/v}
+            # Check if this is a pre-release (contains alpha, beta, rc, dev)
+            if [[ "$VERSION" =~ (alpha|beta|rc|dev) ]]; then
+              IS_PRERELEASE=true
+            else
+              IS_PRERELEASE=false
+            fi
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is-prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "Releasing version: $VERSION (prerelease: $IS_PRERELEASE)"
+
+      - name: Validate version format
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9\-\.]*)?$ ]]; then
+            echo "❌ Invalid version format: $VERSION"
+            echo "Expected semantic versioning format: X.Y.Z or X.Y.Z-suffix"
+            exit 1
+          fi
+          echo "✅ Version format is valid: $VERSION"
+
+      - name: Check if version matches pyproject.toml
+        run: |
+          uv sync --dev
+          PYPROJECT_VERSION=$(python -c "
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+              print(data['project']['version'])
+          ")
+
+          RELEASE_VERSION="${{ steps.version.outputs.version }}"
+
+          if [[ "$PYPROJECT_VERSION" != "$RELEASE_VERSION" ]]; then
+            echo "❌ Version mismatch:"
+            echo "  pyproject.toml: $PYPROJECT_VERSION"
+            echo "  Release version: $RELEASE_VERSION"
+            echo ""
+            echo "Please update pyproject.toml version before releasing."
+            exit 1
+          fi
+
+          echo "✅ Version matches pyproject.toml: $RELEASE_VERSION"
+
+      - name: Validate changelog exists
+        run: |
+          if [ ! -f "CHANGELOG.md" ]; then
+            echo "⚠️ CHANGELOG.md not found - will generate from git history"
+          else
+            echo "✅ CHANGELOG.md found"
+          fi
+
+  # Run full test suite before release
+  pre-release-tests:
+    name: Pre-Release Tests
+    uses: ./.github/workflows/test.yml
+    needs: validate-release
+
+  # Run security scanning before release
+  pre-release-security:
+    name: Pre-Release Security
+    uses: ./.github/workflows/security.yml
+    needs: validate-release
+
+  # Build and publish to PyPI
+  build-and-publish:
+    name: Build and Publish
+    runs-on: ubuntu-latest
+    needs: [validate-release, pre-release-tests, pre-release-security]
+    timeout-minutes: 20
+    environment:
+      name: release
+      url: https://pypi.org/project/reasoning-library/
+    permissions:
+      id-token: write  # OIDC for PyPI trusted publishing
+      contents: write  # For creating releases
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache uv dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-release-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-release-${{ runner.os }}-
+            uv-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Build package
+        run: |
+          echo "Building reasoning-library v${{ needs.validate-release.outputs.version }}"
+          uv build
+
+      - name: Verify build
+        run: |
+          echo "## Build Verification" >> $GITHUB_STEP_SUMMARY
+          ls -la dist/
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Package Contents" >> $GITHUB_STEP_SUMMARY
+
+          # List contents of built packages
+          for file in dist/*; do
+            echo "**$file:**" >> $GITHUB_STEP_SUMMARY
+            if [[ "$file" == *.whl ]]; then
+              uv run python -c "
+              import zipfile
+              with zipfile.ZipFile('$file', 'r') as z:
+                  for name in sorted(z.namelist())[:20]:  # First 20 files
+                      print(f'  {name}')
+              " >> $GITHUB_STEP_SUMMARY
+            elif [[ "$file" == *.tar.gz ]]; then
+              uv run python -c "
+              import tarfile
+              with tarfile.open('$file', 'r:gz') as t:
+                  for name in sorted(t.getnames())[:20]:  # First 20 files
+                      print(f'  {name}')
+              " >> $GITHUB_STEP_SUMMARY
+            fi
+            echo "" >> $GITHUB_STEP_SUMMARY
+          done
+
+      - name: Test installation
+        run: |
+          # Test installation in clean environment
+          uv venv test-install
+          source test-install/bin/activate
+          uv pip install dist/*.whl
+
+          # Test basic import
+          python -c "
+          import reasoning_library
+          print(f'Successfully imported reasoning_library')
+          print(f'Available modules: {dir(reasoning_library)}')
+          "
+
+      - name: Publish to Test PyPI
+        if: needs.validate-release.outputs.is-prerelease == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          verbose: true
+
+      - name: Publish to PyPI
+        if: needs.validate-release.outputs.is-prerelease == 'false'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          verbose: true
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts-v${{ needs.validate-release.outputs.version }}
+          path: dist/
+          retention-days: 90
+
+  # Create GitHub release
+  create-github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [validate-release, build-and-publish]
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts-v${{ needs.validate-release.outputs.version }}
+          path: dist/
+
+      - name: Generate changelog
+        run: |
+          VERSION="v${{ needs.validate-release.outputs.version }}"
+
+          # Get the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || echo "")
+
+          if [ -n "$PREV_TAG" ]; then
+            echo "## Changes since $PREV_TAG" > release-notes.md
+            echo "" >> release-notes.md
+
+            # Generate changelog from commits
+            git log --pretty=format:"- %s (%h)" $PREV_TAG..HEAD >> release-notes.md
+          else
+            echo "## Initial Release" > release-notes.md
+            echo "" >> release-notes.md
+            echo "This is the initial release of reasoning-library." >> release-notes.md
+          fi
+
+          echo "" >> release-notes.md
+          echo "## Installation" >> release-notes.md
+          echo "" >> release-notes.md
+          echo "\`\`\`bash" >> release-notes.md
+          echo "pip install reasoning-library==${{ needs.validate-release.outputs.version }}" >> release-notes.md
+          echo "\`\`\`" >> release-notes.md
+
+      - name: Create GitHub Release
+        run: |
+          # Create release using GitHub CLI (modern, secure alternative to deprecated action)
+          gh release create "v${{ needs.validate-release.outputs.version }}" \
+            --title "reasoning-library v${{ needs.validate-release.outputs.version }}" \
+            --notes-file release-notes.md \
+            ${{ needs.validate-release.outputs.is-prerelease == 'true' && '--prerelease' || '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload release assets
+        run: |
+          # Upload wheel and sdist to the release
+          for file in dist/*; do
+            echo "Uploading $file to release..."
+            gh release upload "v${{ needs.validate-release.outputs.version }}" "$file"
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Post-release verification
+  post-release-verification:
+    name: Post-Release Verification
+    runs-on: ubuntu-latest
+    needs: [validate-release, create-github-release]
+    timeout-minutes: 15
+    steps:
+      - name: Wait for PyPI propagation
+        run: |
+          echo "Waiting for package to be available on PyPI..."
+          sleep 60  # Wait 1 minute for PyPI to propagate
+
+      - name: Verify PyPI package
+        run: |
+          VERSION="${{ needs.validate-release.outputs.version }}"
+
+          # Try to install from PyPI
+          pip install reasoning-library==$VERSION
+
+          # Test basic functionality
+          python -c "
+          import reasoning_library
+          print(f'Successfully installed reasoning-library v$VERSION from PyPI')
+          "
+
+      - name: Create success summary
+        run: |
+          echo "## 🚀 Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ needs.validate-release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Type**: ${{ needs.validate-release.outputs.is-prerelease == 'true' && 'Pre-release' || 'Stable Release' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**PyPI**: https://pypi.org/project/reasoning-library/${{ needs.validate-release.outputs.version }}/" >> $GITHUB_STEP_SUMMARY
+          echo "**GitHub Release**: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.validate-release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Installation" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "pip install reasoning-library==${{ needs.validate-release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

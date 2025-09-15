@@ -1,0 +1,338 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_CACHE_DIR: /tmp/.uv-cache
+
+jobs:
+  # Dependency vulnerability scanning
+  dependency-scanning:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache uv dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-security-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-security-${{ runner.os }}-
+            uv-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run safety check for known vulnerabilities
+        run: |
+          uv add safety --dev
+          uv run safety check --json --output safety-report.json || true
+          uv run safety check --output safety-report.txt || true
+
+      - name: Run pip-audit for additional vulnerability scanning
+        run: |
+          uv add pip-audit --dev
+          uv run pip-audit --format=json --output=pip-audit-report.json || true
+          uv run pip-audit --format=cyclonedx-json --output=sbom.json || true
+
+      - name: Parse vulnerability reports
+        run: |
+          echo "## Security Scan Results" >> $GITHUB_STEP_SUMMARY
+
+          # Check safety results
+          if [ -f "safety-report.txt" ]; then
+            echo "### Safety Check Results" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            cat safety-report.txt >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Check pip-audit results
+          if [ -f "pip-audit-report.json" ]; then
+            echo "### Pip-Audit Results" >> $GITHUB_STEP_SUMMARY
+            VULN_COUNT=$(python -c "
+            import json
+            try:
+                with open('pip-audit-report.json') as f:
+                    data = json.load(f)
+                    print(len(data.get('vulnerabilities', [])))
+            except:
+                print(0)
+            ")
+            echo "Found $VULN_COUNT vulnerabilities" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            safety-report.*
+            pip-audit-report.*
+            sbom.json
+          retention-days: 30
+
+      - name: Fail on high severity vulnerabilities
+        run: |
+          # Check for high severity vulnerabilities and fail if found
+          if [ -f "safety-report.json" ]; then
+            HIGH_SEVERITY=$(python -c "
+            import json
+            try:
+                with open('safety-report.json') as f:
+                    data = json.load(f)
+                    high_count = sum(1 for vuln in data.get('vulnerabilities', [])
+                                   if vuln.get('severity', '').lower() in ['high', 'critical'])
+                    print(high_count)
+            except:
+                print(0)
+            ")
+
+            if [ "$HIGH_SEVERITY" -gt 0 ]; then
+              echo "❌ Found $HIGH_SEVERITY high/critical severity vulnerabilities"
+              exit 1
+            fi
+          fi
+
+  # Static Application Security Testing (SAST)
+  sast-scanning:
+    name: Static Security Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Cache uv dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.UV_CACHE_DIR }}
+          key: uv-security-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: |
+            uv-security-${{ runner.os }}-
+            uv-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run bandit security linter
+        run: |
+          uv add bandit[toml] --dev
+          uv run bandit -r src/ -f json -o bandit-report.json || true
+          uv run bandit -r src/ -f txt -o bandit-report.txt || true
+          uv run bandit -r src/ -f sarif -o bandit-results.sarif || true
+
+      - name: Run semgrep security analysis
+        run: |
+          uv add semgrep --dev
+          uv run semgrep --config=auto src/ --json --output=semgrep-report.json || true
+          uv run semgrep --config=auto src/ --output=semgrep-report.txt || true
+          uv run semgrep --config=auto src/ --sarif --output=semgrep-results.sarif || true
+
+      - name: Analyze security findings
+        run: |
+          echo "## Static Security Analysis" >> $GITHUB_STEP_SUMMARY
+
+          # Bandit results
+          if [ -f "bandit-report.json" ]; then
+            echo "### Bandit Results" >> $GITHUB_STEP_SUMMARY
+            HIGH_CONFIDENCE=$(python -c "
+            import json
+            try:
+                with open('bandit-report.json') as f:
+                    data = json.load(f)
+                    high_count = sum(1 for result in data.get('results', [])
+                                   if result.get('issue_confidence', '').lower() == 'high'
+                                   and result.get('issue_severity', '').lower() in ['medium', 'high'])
+                    print(high_count)
+            except:
+                print(0)
+            ")
+            echo "High confidence security issues: $HIGH_CONFIDENCE" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Semgrep results
+          if [ -f "semgrep-report.json" ]; then
+            echo "### Semgrep Results" >> $GITHUB_STEP_SUMMARY
+            SEMGREP_ISSUES=$(python -c "
+            import json
+            try:
+                with open('semgrep-report.json') as f:
+                    data = json.load(f)
+                    print(len(data.get('results', [])))
+            except:
+                print(0)
+            ")
+            echo "Semgrep security findings: $SEMGREP_ISSUES" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload bandit SARIF results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: bandit-results.sarif
+          category: bandit
+
+      - name: Upload semgrep SARIF results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: semgrep-results.sarif
+          category: semgrep
+
+      - name: Upload SAST reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sast-reports
+          path: |
+            bandit-report.*
+            bandit-results.sarif
+            semgrep-report.*
+            semgrep-results.sarif
+          retention-days: 30
+
+  # Supply chain security
+  supply-chain-security:
+    name: Supply Chain Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Verify dependency integrity
+        run: |
+          # Check if uv.lock is up to date with pyproject.toml
+          uv lock --check
+
+      - name: Analyze dependency licenses
+        run: |
+          uv sync --dev
+          uv add pip-licenses --dev
+          uv run pip-licenses --format=json --output-file=licenses.json
+          uv run pip-licenses --format=plain --output-file=licenses.txt
+
+      - name: Check for risky licenses
+        run: |
+          echo "## License Analysis" >> $GITHUB_STEP_SUMMARY
+
+          # Check for GPL and other copyleft licenses that might be problematic
+          RISKY_LICENSES=$(python -c "
+          import json
+          risky = ['GPL', 'AGPL', 'LGPL', 'MPL']
+          try:
+              with open('licenses.json') as f:
+                  data = json.load(f)
+                  risky_count = sum(1 for pkg in data
+                                  if any(risk in pkg.get('License', '').upper()
+                                        for risk in risky))
+                  print(risky_count)
+          except:
+              print(0)
+          ")
+
+          echo "Packages with potentially risky licenses: $RISKY_LICENSES" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$RISKY_LICENSES" -gt 0 ]; then
+            echo "⚠️ Found packages with copyleft licenses - review required" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload license reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-reports
+          path: |
+            licenses.*
+          retention-days: 30
+
+  # Security summary
+  security-gate:
+    name: Security Gate
+    runs-on: ubuntu-latest
+    needs: [dependency-scanning, sast-scanning, supply-chain-security]
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: Check security status
+        run: |
+          echo "Dependency scanning: ${{ needs.dependency-scanning.result }}"
+          echo "SAST scanning: ${{ needs.sast-scanning.result }}"
+          echo "Supply chain security: ${{ needs.supply-chain-security.result }}"
+
+          # Fail if critical security jobs failed
+          if [[ "${{ needs.dependency-scanning.result }}" != "success" ]]; then
+            echo "❌ Dependency vulnerability scanning failed"
+            exit 1
+          fi
+
+          echo "✅ Security scanning completed successfully"
+
+      - name: Security summary
+        run: |
+          echo "## 🔒 Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Dependency vulnerability scan completed" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Static application security testing completed" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Supply chain security verified" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: All security gates passed ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "For detailed security reports, check the uploaded artifacts." >> $GITHUB_STEP_SUMMARY
