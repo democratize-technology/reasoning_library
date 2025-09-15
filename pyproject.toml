@@ -45,10 +45,10 @@ test = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/reasoning-library/reasoning-library"
-Repository = "https://github.com/reasoning-library/reasoning-library"
-Documentation = "https://github.com/reasoning-library/reasoning-library#readme"
-Issues = "https://github.com/reasoning-library/reasoning-library/issues"
+Homepage = "https://github.com/democratize-technology/reasoning_library"
+Repository = "https://github.com/democratize-technology/reasoning_library"
+Documentation = "https://github.com/democratize-technology/reasoning_library#readme"
+Issues = "https://github.com/democratize-technology/reasoning_library/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/reasoning_library"]
@@ -125,3 +125,8 @@ strict_equality = true
 [[tool.mypy.overrides]]
 module = ["numpy.*"]
 ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "twine>=6.2.0",
+]
