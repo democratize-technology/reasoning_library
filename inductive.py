@@ -124,7 +124,11 @@ def _calculate_geometric_confidence(ratios: List[float], sequence_length: int, b
     return min(1.0, max(0.0, confidence))
 
 
-@tool_spec
+@tool_spec(
+    mathematical_basis="Arithmetic and geometric progression analysis",
+    confidence_factors=["data_sufficiency", "pattern_quality", "complexity"],
+    confidence_formula="base * data_sufficiency_factor * pattern_quality_factor * complexity_factor",
+)
 @curry
 def predict_next_in_sequence(sequence: List[float], reasoning_chain: Optional[ReasoningChain] = None, *, rtol: float = 0.3, atol: float = 1e-8) -> Optional[float]:
     """
@@ -192,7 +196,10 @@ def predict_next_in_sequence(sequence: List[float], reasoning_chain: Optional[Re
         reasoning_chain.add_step(stage=stage, description=description, result=None, confidence=0.0)
     return None
 
-@tool_spec
+@tool_spec(
+    mathematical_basis="Arithmetic and geometric progression analysis",
+    confidence_factors=["data_sufficiency", "pattern_quality", "complexity"],
+)
 @curry
 def find_pattern_description(sequence: List[float], reasoning_chain: Optional[ReasoningChain] = None, *, rtol: float = 0.3, atol: float = 1e-8) -> str:
     """

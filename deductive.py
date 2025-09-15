@@ -145,7 +145,10 @@ def check_modus_ponens_premises_with_confidence(p: bool, q: bool) -> tuple:
     # For modus ponens premises: confidence is always 1.0 since it's a deterministic logical check
     return result, 1.0
 
-@tool_spec
+@tool_spec(
+    mathematical_basis="Formal deductive logic using Modus Ponens inference rule",
+    confidence_factors=["premise_truth_value"],
+)
 def apply_modus_ponens(p_is_true: bool, p_implies_q_is_true: bool, reasoning_chain: Optional[ReasoningChain] = None) -> Optional[bool]:
     """
     Applies the Modus Ponens rule: If P is true and (P -> Q) is true, then Q is true.

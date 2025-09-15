@@ -10,11 +10,12 @@ import re
 # Security constants and compiled patterns
 MAX_SOURCE_CODE_SIZE = 10000  # Prevent ReDoS attacks by limiting input size
 
-# Pre-compiled regex patterns to prevent ReDoS vulnerabilities
-FACTOR_PATTERN = re.compile(r'(\w*(?:data_sufficiency|pattern_quality|complexity)_factor)\s*(?:\*|,|\+|\-|=)', re.IGNORECASE | re.MULTILINE)
+# Pre-compiled regex patterns with ReDoS vulnerability fixes
+# Using more specific patterns to avoid catastrophic backtracking
+FACTOR_PATTERN = re.compile(r'(\w{0,30}(?:data_sufficiency|pattern_quality|complexity)_factor)[\s]{0,5}(?:\*|,|\+|\-|=)', re.IGNORECASE | re.MULTILINE)
 COMMENT_PATTERN = re.compile(r'#\s*(?:Data|Pattern|Complexity)\s+([^#\n]+factor)', re.IGNORECASE | re.MULTILINE)
 EVIDENCE_PATTERN = re.compile(r'f?"[^"]*(?:confidence\s+based\s+on|factors?[\s:]*in)[^"]*([^"\.]+pattern[^"\.]*)', re.IGNORECASE | re.MULTILINE)
-COMBINATION_PATTERN = re.compile(r'(\w+_factor)\s*\*\s*(\w+_factor)', re.IGNORECASE | re.MULTILINE)
+COMBINATION_PATTERN = re.compile(r'(\w{1,30}_factor)[\s]{0,10}\*[\s]{0,10}(\w{1,30}_factor)', re.IGNORECASE | re.MULTILINE)
 CLEAN_FACTOR_PATTERN = re.compile(r'[()=\*]+', re.IGNORECASE)
 
 # --- Enhanced Tool Registry ---
@@ -33,15 +34,37 @@ class ToolMetadata:
     platform_notes: Optional[Dict[str, str]] = field(default_factory=dict)
     is_mathematical_reasoning: bool = False
     confidence_formula: Optional[str] = None
+    confidence_factors: Optional[List[str]] = field(default_factory=list)
 
 def _detect_mathematical_reasoning(func: Callable) -> tuple[bool, Optional[str], Optional[str]]:
     """
     Detect if a function performs mathematical reasoning and extract confidence documentation.
 
+    Optimized to perform fast initial checks before expensive source code extraction.
+
     Returns:
         tuple: (is_mathematical, confidence_documentation, mathematical_basis)
     """
-    # Secure source code extraction with proper error handling
+    # Check for mathematical reasoning indicators
+    math_indicators = [
+        'confidence', 'probability', 'statistical', 'variance', 'coefficient_of_variation',
+        'geometric', 'arithmetic', 'progression', 'pattern', 'deductive', 'inductive',
+        'modus_ponens', 'logical', 'reasoning_chain'
+    ]
+
+    # Fast initial check using only docstring and function name
+    docstring = func.__doc__ or ""
+    func_name = getattr(func, '__name__', '')
+
+    # Quick check without source code extraction
+    has_math_indicators_in_docs = any(indicator in docstring.lower() or indicator in func_name.lower()
+                                     for indicator in math_indicators)
+
+    # If no mathematical indicators in docs/name, likely not mathematical
+    if not has_math_indicators_in_docs:
+        return False, None, None
+
+    # Only extract source code if initial check suggests mathematical reasoning
     try:
         source_code = inspect.getsource(func) if hasattr(func, '__code__') else ""
     except (OSError, TypeError):
@@ -52,15 +75,7 @@ def _detect_mathematical_reasoning(func: Callable) -> tuple[bool, Optional[str],
     if len(source_code) > MAX_SOURCE_CODE_SIZE:
         source_code = source_code[:MAX_SOURCE_CODE_SIZE]  # Truncate to safe size
 
-    docstring = func.__doc__ or ""
-
-    # Check for mathematical reasoning indicators
-    math_indicators = [
-        'confidence', 'probability', 'statistical', 'variance', 'coefficient_of_variation',
-        'geometric', 'arithmetic', 'progression', 'pattern', 'deductive', 'inductive',
-        'modus_ponens', 'logical', 'reasoning_chain'
-    ]
-
+    # Final check including source code
     is_mathematical = any(indicator in source_code.lower() or indicator in docstring.lower()
                          for indicator in math_indicators)
 
@@ -233,7 +248,11 @@ def _enhance_description_with_confidence_docs(description: str, metadata: ToolMe
     if metadata.mathematical_basis:
         enhanced_desc += f"\n\nMathematical Basis: {metadata.mathematical_basis}"
 
-    if metadata.confidence_documentation:
+    # Generate confidence documentation from explicit factors if available
+    if metadata.confidence_factors:
+        enhanced_desc += f"\n\nConfidence Scoring: Confidence calculation based on: {', '.join(metadata.confidence_factors)}"
+    elif metadata.confidence_documentation:
+        # Fallback to existing documentation if factors are not provided
         enhanced_desc += f"\n\nConfidence Scoring: {metadata.confidence_documentation}"
 
     if metadata.confidence_formula:
@@ -408,72 +427,104 @@ def get_json_schema_type(py_type: Any) -> str:
 
     return TYPE_MAP.get(py_type, "string") # Default to string if not found
 
-def tool_spec(func: Callable) -> Callable:
+def tool_spec(
+    func: Optional[Callable] = None,
+    *,
+    mathematical_basis: Optional[str] = None,
+    confidence_factors: Optional[List[str]] = None,
+    confidence_formula: Optional[str] = None,
+) -> Callable:
     """
     Enhanced decorator to attach a JSON Schema tool specification to a function.
     The spec is derived from the function's signature and docstring.
-    Automatically detects mathematical reasoning functions and enhances with confidence documentation.
+
+    This decorator supports a hybrid model for metadata:
+    1.  **Explicit Declaration (Preferred):** Pass metadata directly as arguments
+        (e.g., `mathematical_basis`, `confidence_factors`).
+    2.  **Heuristic Fallback:** If no explicit arguments are provided, it falls back
+        to `_detect_mathematical_reasoning` to infer metadata for backward compatibility.
     """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)
 
-    signature = inspect.signature(func)
-    parameters = {}
-    required_params = []
+    def decorator(fn: Callable) -> Callable:
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            return fn(*args, **kwargs)
 
-    for name, param in signature.parameters.items():
-        if name == 'reasoning_chain': # Exclude the reasoning_chain argument from tool spec
-            continue
+        signature = inspect.signature(fn)
+        parameters = {}
+        required_params = []
 
-        param_type = param.annotation if param.annotation is not inspect.Parameter.empty else Any
-        json_type = get_json_schema_type(param_type)
+        for name, param in signature.parameters.items():
+            if name == 'reasoning_chain':  # Exclude from tool spec
+                continue
 
-        param_info = {"type": json_type}
-        if hasattr(param_type, '__origin__') and param_type.__origin__ is list: # Handle array items
-            if param_type.__args__:
-                param_info["items"] = {"type": get_json_schema_type(param_type.__args__[0])}
+            param_type = param.annotation if param.annotation is not inspect.Parameter.empty else Any
+            json_type = get_json_schema_type(param_type)
 
-        parameters[name] = param_info
+            param_info = {"type": json_type}
+            if hasattr(param_type, '__origin__') and param_type.__origin__ is list:
+                if param_type.__args__:
+                    param_info["items"] = {"type": get_json_schema_type(param_type.__args__[0])}
 
-        if param.default is inspect.Parameter.empty:
-            required_params.append(name)
+            parameters[name] = param_info
 
-    # Create base tool specification
-    tool_specification = {
-        "type": "function",
-        "function": {
-            "name": func.__name__,
-            "description": func.__doc__.strip() if func.__doc__ else "",
-            "parameters": {
-                "type": "object",
-                "properties": parameters,
-                "required": required_params,
+            if param.default is inspect.Parameter.empty:
+                required_params.append(name)
+
+        tool_specification = {
+            "type": "function",
+            "function": {
+                "name": fn.__name__,
+                "description": fn.__doc__.strip() if fn.__doc__ else "",
+                "parameters": {
+                    "type": "object",
+                    "properties": parameters,
+                    "required": required_params,
+                },
             },
-        },
-    }
+        }
 
-    # Detect mathematical reasoning and create enhanced metadata
-    is_mathematical, confidence_doc, mathematical_basis = _detect_mathematical_reasoning(func)
+        # Hybrid model: Prioritize explicit declaration, then fall back to heuristic detection
+        is_mathematical = False
+        confidence_doc = None
+        # Initialize with explicit parameter or None
+        final_mathematical_basis = mathematical_basis
 
-    metadata = ToolMetadata(
-        confidence_documentation=confidence_doc,
-        mathematical_basis=mathematical_basis,
-        is_mathematical_reasoning=is_mathematical,
-        platform_notes={}
-    )
+        if confidence_factors:
+            confidence_doc = f"Confidence calculation based on: {', '.join(confidence_factors)}"
+            is_mathematical = True
 
-    # Add to enhanced registry
-    ENHANCED_TOOL_REGISTRY.append({
-        'function': wrapper,
-        'tool_spec': tool_specification,
-        'metadata': metadata
-    })
+        # Fallback to heuristic detection if explicit metadata is not provided
+        if not is_mathematical and not final_mathematical_basis:
+            is_mathematical_heuristic, confidence_doc_heuristic, mathematical_basis_heuristic = _detect_mathematical_reasoning(fn)
+            if is_mathematical_heuristic:
+                is_mathematical = True
+                if not confidence_doc:
+                    confidence_doc = confidence_doc_heuristic
+                if not final_mathematical_basis:
+                    final_mathematical_basis = mathematical_basis_heuristic
 
-    # Attach tool_spec to wrapper for backward compatibility
-    wrapper.tool_spec = tool_specification
 
-    # Add to legacy registry for backward compatibility
-    TOOL_REGISTRY.append(wrapper)
+        metadata = ToolMetadata(
+            confidence_documentation=confidence_doc,
+            mathematical_basis=final_mathematical_basis,
+            is_mathematical_reasoning=is_mathematical,
+            confidence_formula=confidence_formula,
+            confidence_factors=confidence_factors,
+            platform_notes={}
+        )
 
-    return wrapper
+        ENHANCED_TOOL_REGISTRY.append({
+            'function': wrapper,
+            'tool_spec': tool_specification,
+            'metadata': metadata
+        })
+
+        wrapper.tool_spec = tool_specification
+        TOOL_REGISTRY.append(wrapper)
+
+        return wrapper
+
+    if func:
+        return decorator(func)
+    return decorator
