@@ -6,7 +6,7 @@ and the Modus Ponens rule, implemented using a functional programming style.
 """
 from typing import Callable, Any, Optional, List
 try:
-    from core import curry, ReasoningStep, ReasoningChain, tool_spec
+    from .core import curry, ReasoningStep, ReasoningChain, tool_spec
 except ImportError:
     from core import curry, ReasoningStep, ReasoningChain, tool_spec
 

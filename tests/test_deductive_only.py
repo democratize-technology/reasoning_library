@@ -3,21 +3,16 @@
 Test deductive reasoning confidence scoring only.
 """
 
-import sys
-import os
-
-# Add current directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from reasoning_library.deductive import (
+    logical_and_with_confidence,
+    logical_or_with_confidence,
+    implies_with_confidence,
+    apply_modus_ponens
+)
+from reasoning_library.core import ReasoningChain
 
 def test_deductive_confidence():
     """Test deductive reasoning confidence scoring."""
-    from deductive import (
-        logical_and_with_confidence,
-        logical_or_with_confidence,
-        implies_with_confidence,
-        apply_modus_ponens
-    )
-    from core import ReasoningChain
 
     print("Testing deductive reasoning confidence scoring...")
 

@@ -7,7 +7,7 @@ pattern recognition in numerical sequences.
 import numpy as np
 from typing import List, Optional, Any, Dict, Union
 try:
-    from core import curry, ReasoningStep, ReasoningChain, tool_spec
+    from .core import curry, ReasoningStep, ReasoningChain, tool_spec
 except ImportError:
     from core import curry, ReasoningStep, ReasoningChain, tool_spec
 

@@ -8,7 +8,10 @@ import re
 import threading
 from collections import OrderedDict
 from typing import Any, Dict, Optional
-from core import ReasoningChain, tool_spec
+try:
+    from .core import ReasoningChain, tool_spec
+except ImportError:
+    from core import ReasoningChain, tool_spec
 
 # Thread-safe conversation management with bounded storage
 _conversations: OrderedDict[str, ReasoningChain] = OrderedDict()
