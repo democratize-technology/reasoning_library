@@ -210,8 +210,9 @@ jobs:
           The library is organized into several key modules:
 
           - `reasoning_library.core` - Core reasoning functionality
-          - `reasoning_library.logic` - Logic operations
-          - `reasoning_library.utils` - Utility functions
+          - `reasoning_library.chain_of_thought` - Chain of thought reasoning
+          - `reasoning_library.deductive` - Deductive reasoning methods
+          - `reasoning_library.inductive` - Inductive reasoning methods
 
           ## Requirements
 
@@ -235,18 +236,26 @@ jobs:
              :undoc-members:
              :show-inheritance:
 
-          Logic Module
-          ------------
+          Chain of Thought
+          ----------------
 
-          .. automodule:: reasoning_library.logic
+          .. automodule:: reasoning_library.chain_of_thought
              :members:
              :undoc-members:
              :show-inheritance:
 
-          Utilities
-          ---------
+          Deductive Reasoning
+          ------------------
 
-          .. automodule:: reasoning_library.utils
+          .. automodule:: reasoning_library.deductive
+             :members:
+             :undoc-members:
+             :show-inheritance:
+
+          Inductive Reasoning
+          ------------------
+
+          .. automodule:: reasoning_library.inductive
              :members:
              :undoc-members:
              :show-inheritance:

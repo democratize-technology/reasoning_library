@@ -167,7 +167,6 @@ jobs:
           uv add bandit[toml] --dev
           uv run bandit -r src/ -f json -o bandit-report.json || true
           uv run bandit -r src/ -f txt -o bandit-report.txt || true
-          uv run bandit -r src/ -f sarif -o bandit-results.sarif || true
 
       - name: Run semgrep security analysis
         run: |
@@ -213,12 +212,7 @@ jobs:
             echo "Semgrep security findings: $SEMGREP_ISSUES" >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Upload bandit SARIF results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: bandit-results.sarif
-          category: bandit
+      # Note: bandit doesn't support SARIF format, only semgrep does
 
       - name: Upload semgrep SARIF results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
@@ -234,7 +228,6 @@ jobs:
           name: sast-reports
           path: |
             bandit-report.*
-            bandit-results.sarif
             semgrep-report.*
             semgrep-results.sarif
           retention-days: 30
