@@ -4,6 +4,7 @@ Deductive Reasoning Module.
 This module provides functions for deductive logic, including basic logical operations
 and the Modus Ponens rule, implemented using a functional programming style.
 """
+
 from typing import Any, Callable, List, Optional, Tuple
 
 from .core import ReasoningChain, ReasoningStep, curry, tool_spec

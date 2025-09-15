@@ -1,6 +1,7 @@
 """
 Core utilities for the reasoning library.
 """
+
 import inspect
 import re
 from dataclasses import dataclass, field
@@ -51,7 +52,7 @@ class ToolMetadata:
 
 
 def _detect_mathematical_reasoning(
-    func: Callable[..., Any]
+    func: Callable[..., Any],
 ) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Detect if a function performs mathematical reasoning and extract confidence documentation.
@@ -335,10 +336,10 @@ def get_openai_tools() -> List[Dict[str, Any]]:
     for entry in ENHANCED_TOOL_REGISTRY:
         # Create enhanced description using safe copy
         enhanced_spec = _safe_copy_spec(entry["tool_spec"])
-        enhanced_spec["function"][
-            "description"
-        ] = _enhance_description_with_confidence_docs(
-            enhanced_spec["function"]["description"], entry["metadata"]
+        enhanced_spec["function"]["description"] = (
+            _enhance_description_with_confidence_docs(
+                enhanced_spec["function"]["description"], entry["metadata"]
+            )
         )
         openai_tools.append(_openai_format(enhanced_spec))
     return openai_tools
@@ -355,10 +356,10 @@ def get_bedrock_tools() -> List[Dict[str, Any]]:
     for entry in ENHANCED_TOOL_REGISTRY:
         # Create enhanced description using safe copy
         enhanced_spec = _safe_copy_spec(entry["tool_spec"])
-        enhanced_spec["function"][
-            "description"
-        ] = _enhance_description_with_confidence_docs(
-            enhanced_spec["function"]["description"], entry["metadata"]
+        enhanced_spec["function"]["description"] = (
+            _enhance_description_with_confidence_docs(
+                enhanced_spec["function"]["description"], entry["metadata"]
+            )
         )
         bedrock_tools.append(_bedrock_format(enhanced_spec))
     return bedrock_tools

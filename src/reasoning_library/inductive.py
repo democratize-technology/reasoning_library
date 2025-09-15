@@ -4,6 +4,7 @@ Inductive Reasoning Module.
 This module provides functions for simple inductive reasoning, such as
 pattern recognition in numerical sequences.
 """
+
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np

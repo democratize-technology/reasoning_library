@@ -4,6 +4,7 @@ Chain of Thought Reasoning Module.
 This module provides universal LLM functions for managing conversational reasoning chains
 with thread-safe conversation management and confidence scoring.
 """
+
 import re
 import threading
 from collections import OrderedDict
