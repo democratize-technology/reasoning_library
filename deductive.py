@@ -6,7 +6,7 @@ and the Modus Ponens rule, implemented using a functional programming style.
 """
 from typing import Callable, Any, Optional, List
 try:
-    from reasoning_library.core import curry, ReasoningStep, ReasoningChain, tool_spec
+    from core import curry, ReasoningStep, ReasoningChain, tool_spec
 except ImportError:
     from core import curry, ReasoningStep, ReasoningChain, tool_spec
 
@@ -14,7 +14,6 @@ except ImportError:
 
 @curry
 def logical_not(p: bool) -> bool:
-    """Logical NOT operation."""
     return not p
 
 def logical_not_with_confidence(p: bool) -> tuple:
@@ -37,7 +36,6 @@ def logical_not_with_confidence(p: bool) -> tuple:
 
 @curry
 def logical_and(p: bool, q: bool) -> bool:
-    """Logical AND operation."""
     return p and q
 
 def logical_and_with_confidence(p: bool, q: bool) -> tuple:
@@ -63,7 +61,6 @@ def logical_and_with_confidence(p: bool, q: bool) -> tuple:
 
 @curry
 def logical_or(p: bool, q: bool) -> bool:
-    """Logical OR operation."""
     return p or q
 
 def logical_or_with_confidence(p: bool, q: bool) -> tuple:
