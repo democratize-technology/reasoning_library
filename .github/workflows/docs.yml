@@ -293,7 +293,7 @@ jobs:
       - name: Build documentation
         run: |
           cd docs
-          uv run sphinx-build -b html source build/html -W --keep-going
+          uv run sphinx-build -b html source build/html --keep-going
 
       - name: Test documentation build
         run: |

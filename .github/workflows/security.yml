@@ -57,8 +57,8 @@ jobs:
       - name: Run safety check for known vulnerabilities
         run: |
           uv add safety --dev
-          uv run safety check --json --output safety-report.json || true
-          uv run safety check --output safety-report.txt || true
+          uv run safety check --output json > safety-report.json || true
+          uv run safety check --output text > safety-report.txt || true
 
       - name: Run pip-audit for additional vulnerability scanning
         run: |
