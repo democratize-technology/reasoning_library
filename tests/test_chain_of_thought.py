@@ -508,12 +508,12 @@ class TestMemoryManagement:
     def test_conversation_eviction_when_limit_reached(self):
         """Test that old conversations are evicted when limit is reached."""
         # Mock the limit to a small number for testing
-        original_limit = _MAX_CONVERSATIONS
+        import reasoning_library.chain_of_thought as cot_module
+        original_limit = cot_module._MAX_CONVERSATIONS
 
         try:
             # Temporarily set a small limit
-            import chain_of_thought
-            chain_of_thought._MAX_CONVERSATIONS = 3
+            cot_module._MAX_CONVERSATIONS = 3
 
             # Add conversations up to the limit
             for i in range(3):
@@ -537,8 +537,7 @@ class TestMemoryManagement:
 
         finally:
             # Restore original limit
-            import chain_of_thought
-            chain_of_thought._MAX_CONVERSATIONS = original_limit
+            cot_module._MAX_CONVERSATIONS = original_limit
 
     def test_lru_behavior(self):
         """Test LRU (Least Recently Used) behavior."""

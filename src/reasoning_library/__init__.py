@@ -5,6 +5,7 @@ Enhanced tool specification system supporting AWS Bedrock and OpenAI compatibili
 with automatic confidence documentation for mathematical reasoning functions.
 """
 
+from typing import List, Dict, Any
 from .core import ReasoningChain, ReasoningStep
 from .deductive import apply_modus_ponens
 from .inductive import predict_next_in_sequence, find_pattern_description
@@ -18,6 +19,15 @@ from .core import (
 )
 
 # Pre-populated lists for easy integration
-TOOL_SPECS = get_tool_specs()           # Legacy format
-OPENAI_TOOLS = get_openai_tools()       # OpenAI format
-BEDROCK_TOOLS = get_bedrock_tools()     # Bedrock format
+# Note: These are populated dynamically when modules are imported
+def get_all_tool_specs() -> List[Dict[str, Any]]:
+    """Get all tool specifications - call after importing tool modules."""
+    return get_tool_specs()
+
+def get_all_openai_tools() -> List[Dict[str, Any]]:
+    """Get all OpenAI tool specifications - call after importing tool modules."""
+    return get_openai_tools()
+
+def get_all_bedrock_tools() -> List[Dict[str, Any]]:
+    """Get all Bedrock tool specifications - call after importing tool modules."""
+    return get_bedrock_tools()

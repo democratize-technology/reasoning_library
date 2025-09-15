@@ -7,11 +7,8 @@ with thread-safe conversation management and confidence scoring.
 import re
 import threading
 from collections import OrderedDict
-from typing import Any, Dict, Optional
-try:
-    from .core import ReasoningChain, tool_spec
-except ImportError:
-    from core import ReasoningChain, tool_spec
+from typing import Any, Dict, Optional, List
+from .core import ReasoningChain, tool_spec
 
 # Thread-safe conversation management with bounded storage
 _conversations: OrderedDict[str, ReasoningChain] = OrderedDict()
@@ -33,7 +30,7 @@ def _validate_conversation_id(conversation_id: str) -> str:
     """
     if not isinstance(conversation_id, str):
         raise ValueError("conversation_id must be a string")
-    if not re.match(r'^[a-zA-Z0-9_-]{1,64}$', conversation_id):
+    if not re.match(r'\A[a-zA-Z0-9_-]{1,64}\Z', conversation_id):
         raise ValueError("Invalid conversation_id format. Must be 1-64 alphanumeric characters, underscores, or hyphens.")
     return conversation_id
 
@@ -79,9 +76,9 @@ def chain_of_thought_step(
     result: Any,
     confidence: Optional[float] = None,
     evidence: Optional[str] = None,
-    assumptions: Optional[list] = None,
-    metadata: Optional[dict] = None
-) -> dict:
+    assumptions: Optional[List[str]] = None,
+    metadata: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
     Add a step to a conversation's chain of thought reasoning process.
 
@@ -140,7 +137,7 @@ def chain_of_thought_step(
     }
 
 @tool_spec
-def get_chain_summary(conversation_id: str) -> dict:
+def get_chain_summary(conversation_id: str) -> Dict[str, Any]:
     """
     Get a formatted summary of the reasoning chain for a conversation.
 
@@ -196,7 +193,7 @@ def get_chain_summary(conversation_id: str) -> dict:
         }
 
 @tool_spec
-def clear_chain(conversation_id: str) -> dict:
+def clear_chain(conversation_id: str) -> Dict[str, Any]:
     """
     Clear the reasoning chain for a specific conversation.
 
@@ -240,7 +237,7 @@ def clear_chain(conversation_id: str) -> dict:
                 "success": False
             }
 
-def get_active_conversations() -> list:
+def get_active_conversations() -> List[str]:
     """
     Get a list of all active conversation IDs.
 
@@ -252,7 +249,7 @@ def get_active_conversations() -> list:
     with _conversations_lock:
         return list(_conversations.keys())
 
-def get_conversation_stats() -> dict:
+def get_conversation_stats() -> Dict[str, Any]:
     """
     Get statistics about all active conversations.
 
@@ -262,7 +259,7 @@ def get_conversation_stats() -> dict:
         dict: Statistics including total conversations and step counts.
     """
     with _conversations_lock:
-        stats = {
+        stats: Dict[str, Any] = {
             "total_conversations": len(_conversations),
             "conversation_details": {}
         }

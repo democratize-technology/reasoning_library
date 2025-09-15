@@ -4,11 +4,8 @@ Deductive Reasoning Module.
 This module provides functions for deductive logic, including basic logical operations
 and the Modus Ponens rule, implemented using a functional programming style.
 """
-from typing import Callable, Any, Optional, List
-try:
-    from .core import curry, ReasoningStep, ReasoningChain, tool_spec
-except ImportError:
-    from core import curry, ReasoningStep, ReasoningChain, tool_spec
+from typing import Callable, Any, Optional, List, Tuple
+from .core import curry, ReasoningStep, ReasoningChain, tool_spec
 
 # --- Base Logical Primitives (Pure Functions) ---
 
@@ -16,7 +13,7 @@ except ImportError:
 def logical_not(p: bool) -> bool:
     return not p
 
-def logical_not_with_confidence(p: bool) -> tuple:
+def logical_not_with_confidence(p: bool) -> Tuple[bool, float]:
     """
     Logical NOT operation with confidence scoring.
 
@@ -38,7 +35,7 @@ def logical_not_with_confidence(p: bool) -> tuple:
 def logical_and(p: bool, q: bool) -> bool:
     return p and q
 
-def logical_and_with_confidence(p: bool, q: bool) -> tuple:
+def logical_and_with_confidence(p: bool, q: bool) -> Tuple[bool, float]:
     """
     Logical AND operation with confidence scoring.
 
@@ -63,7 +60,7 @@ def logical_and_with_confidence(p: bool, q: bool) -> tuple:
 def logical_or(p: bool, q: bool) -> bool:
     return p or q
 
-def logical_or_with_confidence(p: bool, q: bool) -> tuple:
+def logical_or_with_confidence(p: bool, q: bool) -> Tuple[bool, float]:
     """
     Logical OR operation with confidence scoring.
 
@@ -87,9 +84,9 @@ def logical_or_with_confidence(p: bool, q: bool) -> tuple:
 @curry
 def implies(p: bool, q: bool) -> bool:
     """Logical IMPLICATION (P -> Q is equivalent to NOT P OR Q)."""
-    return logical_or(logical_not(p), q)
+    return bool(logical_or(logical_not(p), q))
 
-def implies_with_confidence(p: bool, q: bool) -> tuple:
+def implies_with_confidence(p: bool, q: bool) -> Tuple[bool, float]:
     """
     Logical IMPLICATION with confidence scoring.
 
@@ -118,9 +115,9 @@ def check_modus_ponens_premises(p: bool, q: bool) -> bool:
     Checks if the premises for Modus Ponens are met:
     (P -> Q) AND P
     """
-    return logical_and(implies(p, q), p)
+    return bool(logical_and(implies(p, q), p))
 
-def check_modus_ponens_premises_with_confidence(p: bool, q: bool) -> tuple:
+def check_modus_ponens_premises_with_confidence(p: bool, q: bool) -> Tuple[bool, float]:
     """
     Checks if the premises for Modus Ponens are met with confidence scoring.
 
@@ -146,6 +143,7 @@ def check_modus_ponens_premises_with_confidence(p: bool, q: bool) -> tuple:
     mathematical_basis="Formal deductive logic using Modus Ponens inference rule",
     confidence_factors=["premise_truth_value"],
 )
+@curry
 def apply_modus_ponens(p_is_true: bool, p_implies_q_is_true: bool, reasoning_chain: Optional[ReasoningChain] = None) -> Optional[bool]:
     """
     Applies the Modus Ponens rule: If P is true and (P -> Q) is true, then Q is true.
@@ -163,7 +161,7 @@ def apply_modus_ponens(p_is_true: bool, p_implies_q_is_true: bool, reasoning_cha
     stage = "Deductive Reasoning: Modus Ponens"
     confidence = 0.0
     evidence = f"Premise P is {p_is_true}, Premise (P -> Q) is {p_implies_q_is_true}."
-    assumptions = ["Propositions P and (P -> Q) are true."]
+    assumptions = ["Propositions P and (P -> Q) are true"]
 
     if p_is_true and p_implies_q_is_true:
         conclusion = True

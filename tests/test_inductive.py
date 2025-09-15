@@ -110,10 +110,10 @@ class TestInputValidation:
     def test_empty_sequence_validation(self):
         """Test validation of empty sequences."""
         with pytest.raises(ValueError, match="Sequence cannot be empty"):
-            predict_next_in_sequence([])
+            predict_next_in_sequence([], reasoning_chain=None)
 
         with pytest.raises(ValueError, match="Sequence cannot be empty"):
-            find_pattern_description([])
+            find_pattern_description([], reasoning_chain=None)
 
     def test_invalid_sequence_type_validation(self):
         """Test validation of invalid sequence types."""
@@ -121,10 +121,10 @@ class TestInputValidation:
 
         for invalid_input in invalid_inputs:
             with pytest.raises(TypeError, match="Expected list/tuple/array for sequence"):
-                predict_next_in_sequence(invalid_input)
+                predict_next_in_sequence(invalid_input, reasoning_chain=None)
 
             with pytest.raises(TypeError, match="Expected list/tuple/array for sequence"):
-                find_pattern_description(invalid_input)
+                find_pattern_description(invalid_input, reasoning_chain=None)
 
     @pytest.mark.skipif(not NUMPY_AVAILABLE, reason="NumPy not available")
     def test_numpy_array_input(self):
@@ -133,12 +133,12 @@ class TestInputValidation:
 
         # Test with numpy array
         sequence = np.array([1, 3, 5, 7])
-        result = predict_next_in_sequence(sequence)
+        result = predict_next_in_sequence(sequence, reasoning_chain=None)
         assert result == 9
 
         # Test with tuple
         sequence = (2, 4, 6, 8)
-        result = predict_next_in_sequence(sequence)
+        result = predict_next_in_sequence(sequence, reasoning_chain=None)
         assert result == 10
 
     def test_single_element_sequence(self):
@@ -161,17 +161,17 @@ class TestEdgeCases:
         """Test sequences containing zero values."""
         # Arithmetic sequence with zeros
         sequence = [0, 5, 10, 15]
-        result = predict_next_in_sequence(sequence)
+        result = predict_next_in_sequence(sequence, reasoning_chain=None)
         assert result == 20
 
         # Sequence starting with zero
         sequence = [0, 0, 0, 0]
-        result = predict_next_in_sequence(sequence)
+        result = predict_next_in_sequence(sequence, reasoning_chain=None)
         assert result == 0
 
         # Geometric sequence with zero (should not be detected as geometric)
         sequence = [1, 0, 0, 0]
-        result = predict_next_in_sequence(sequence)
+        result = predict_next_in_sequence(sequence, reasoning_chain=None)
         assert result is None  # Cannot have geometric progression with zeros
 
     @pytest.mark.skipif(not NUMPY_AVAILABLE, reason="NumPy not available")
@@ -179,12 +179,12 @@ class TestEdgeCases:
         """Test sequences with negative values."""
         # Arithmetic with negative difference
         sequence = [10, 7, 4, 1]
-        result = predict_next_in_sequence(sequence)
+        result = predict_next_in_sequence(sequence, reasoning_chain=None)
         assert result == -2
 
         # Geometric with negative ratio
         sequence = [8, -4, 2, -1]
-        result = predict_next_in_sequence(sequence)
+        result = predict_next_in_sequence(sequence, reasoning_chain=None)
         assert result == 0.5
 
     @pytest.mark.skipif(not NUMPY_AVAILABLE, reason="NumPy not available")
@@ -192,12 +192,12 @@ class TestEdgeCases:
         """Test sequences with floating point numbers."""
         # Arithmetic with floats
         sequence = [1.5, 2.5, 3.5, 4.5]
-        result = predict_next_in_sequence(sequence)
+        result = predict_next_in_sequence(sequence, reasoning_chain=None)
         assert abs(result - 5.5) < 1e-10
 
         # Geometric with floats
         sequence = [0.5, 1.0, 2.0, 4.0]
-        result = predict_next_in_sequence(sequence)
+        result = predict_next_in_sequence(sequence, reasoning_chain=None)
         assert abs(result - 8.0) < 1e-10
 
     @pytest.mark.skipif(not NUMPY_AVAILABLE, reason="NumPy not available")
@@ -205,7 +205,7 @@ class TestEdgeCases:
         """Test sequences with very small differences."""
         # Small arithmetic differences
         sequence = [1.0, 1.0001, 1.0002, 1.0003]
-        result = predict_next_in_sequence(sequence)
+        result = predict_next_in_sequence(sequence, reasoning_chain=None)
         assert result is not None
         assert abs(result - 1.0004) < 1e-10
 
@@ -214,12 +214,12 @@ class TestEdgeCases:
         """Test sequences with large numbers."""
         # Large arithmetic sequence
         sequence = [1000000, 2000000, 3000000, 4000000]
-        result = predict_next_in_sequence(sequence)
+        result = predict_next_in_sequence(sequence, reasoning_chain=None)
         assert result == 5000000
 
         # Large geometric sequence
         sequence = [1000, 10000, 100000, 1000000]
-        result = predict_next_in_sequence(sequence)
+        result = predict_next_in_sequence(sequence, reasoning_chain=None)
         assert result == 10000000
 
     @pytest.mark.skipif(not NUMPY_AVAILABLE, reason="NumPy not available")
@@ -229,11 +229,11 @@ class TestEdgeCases:
         sequence = [1, 2.1, 2.9, 4.1]  # Roughly arithmetic with difference ~1
 
         # With default tolerance (should not detect pattern)
-        result = predict_next_in_sequence(sequence)
+        result = predict_next_in_sequence(sequence, reasoning_chain=None)
         assert result is None
 
         # With higher tolerance (should detect pattern)
-        result = predict_next_in_sequence(sequence, rtol=0.5)
+        result = predict_next_in_sequence(sequence, reasoning_chain=None, rtol=0.5)
         assert result is not None
 
 class TestConfidenceScoring:
@@ -243,8 +243,8 @@ class TestConfidenceScoring:
     def test_data_sufficiency_assessment(self):
         """Test data sufficiency factor calculation."""
         # Test arithmetic requirements
-        assert _assess_data_sufficiency(3, 'arithmetic') == 1.0  # Minimum required
-        assert _assess_data_sufficiency(2, 'arithmetic') < 1.0   # Below minimum
+        assert _assess_data_sufficiency(4, 'arithmetic') == 1.0  # Minimum required
+        assert _assess_data_sufficiency(3, 'arithmetic') < 1.0   # Below minimum
         assert _assess_data_sufficiency(6, 'arithmetic') == 1.0  # Above minimum
 
         # Test geometric requirements

@@ -3,7 +3,7 @@ Core utilities for the reasoning library.
 """
 from functools import wraps
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Dict, Callable, Union
+from typing import Any, List, Optional, Dict, Callable, Union, Tuple
 import inspect
 import re
 
@@ -21,10 +21,10 @@ CLEAN_FACTOR_PATTERN = re.compile(r'[()=\*]+', re.IGNORECASE)
 # --- Enhanced Tool Registry ---
 
 # Enhanced registry storing functions with rich metadata
-ENHANCED_TOOL_REGISTRY = []
+ENHANCED_TOOL_REGISTRY: List[Dict[str, Any]] = []
 
 # Legacy registry for backward compatibility
-TOOL_REGISTRY = []
+TOOL_REGISTRY: List[Callable[..., Any]] = []
 
 @dataclass
 class ToolMetadata:
@@ -36,7 +36,7 @@ class ToolMetadata:
     confidence_formula: Optional[str] = None
     confidence_factors: Optional[List[str]] = field(default_factory=list)
 
-def _detect_mathematical_reasoning(func: Callable) -> tuple[bool, Optional[str], Optional[str]]:
+def _detect_mathematical_reasoning(func: Callable[..., Any]) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Detect if a function performs mathematical reasoning and extract confidence documentation.
 
@@ -109,6 +109,14 @@ def _detect_mathematical_reasoning(func: Callable) -> tuple[bool, Optional[str],
             for match in combination_matches[:2]:
                 factor_names.extend([factor.replace('_factor', '').replace('_', ' ') for factor in match])
             confidence_factors.extend(list(set(factor_names)))  # Remove duplicates
+
+        # Pattern 5: Extract from docstring confidence patterns
+        if 'confidence' in docstring.lower() and 'based on' in docstring.lower():
+            # Look for specific patterns in docstring
+            if 'pattern quality' in docstring.lower():
+                confidence_factors.extend(['pattern quality'])
+            if 'pattern' in docstring.lower() and not confidence_factors:
+                confidence_factors.extend(['pattern analysis'])
 
         # Create meaningful confidence documentation
         if confidence_factors:
@@ -260,9 +268,9 @@ def _enhance_description_with_confidence_docs(description: str, metadata: ToolMe
 
     return enhanced_desc
 
-def get_tool_specs():
+def get_tool_specs() -> List[Dict[str, Any]]:
     """Returns a list of all registered tool specifications (legacy format)."""
-    return [func.tool_spec for func in TOOL_REGISTRY]
+    return [getattr(func, 'tool_spec') for func in TOOL_REGISTRY]
 
 def get_openai_tools() -> List[Dict[str, Any]]:
     """
@@ -311,17 +319,27 @@ def get_enhanced_tool_registry() -> List[Dict[str, Any]]:
 
 # --- End Enhanced Tool Registry ---
 
-def curry(func):
+def curry(func: Callable[..., Any]) -> Callable[..., Any]:
     """
-    A simple currying decorator for functions.
+    A currying decorator for functions that properly handles required vs optional parameters.
     Allows functions to be called with fewer arguments than they expect,
     returning a new function that takes the remaining arguments.
     """
+    sig = inspect.signature(func)
+
     @wraps(func)
-    def curried(*args, **kwargs):
-        if len(args) >= func.__code__.co_argcount:
-            return func(*args, **kwargs)
-        return lambda *args2, **kwargs2: curried(*(args + args2), **(kwargs | kwargs2))
+    def curried(*args: Any, **kwargs: Any) -> Any:
+        try:
+            # Try to bind the arguments - this will fail if we don't have enough required args
+            bound = sig.bind(*args, **kwargs)
+        except TypeError:
+            # If binding fails (insufficient args), return a curried function
+            return lambda *args2, **kwargs2: curried(*(args + args2), **(kwargs | kwargs2))
+
+        # If we get here, we have all required arguments - execute the function
+        # Any TypeError from the function execution should be propagated, not caught
+        return func(*args, **kwargs)
+
     return curried
 
 @dataclass
@@ -416,10 +434,15 @@ def get_json_schema_type(py_type: Any) -> str:
     Handles Optional and List types.
     """
     if hasattr(py_type, '__origin__'):
-        if py_type.__origin__ is Optional: # Optional[X] is Union[X, NoneType]
-            # Get the first type in the Union (assuming it's not NoneType itself)
-            actual_type = py_type.__args__[0]
-            return get_json_schema_type(actual_type)
+        if py_type.__origin__ is Union: # Union types (including Optional)
+            # Check if this is Optional[X] (Union[X, None])
+            args = py_type.__args__
+            if len(args) == 2 and type(None) in args:
+                # This is Optional[X] - get the non-None type
+                actual_type = args[0] if args[1] is type(None) else args[1]
+                return get_json_schema_type(actual_type)
+            # For other Union types, default to string
+            return "string"
         elif py_type.__origin__ is list: # List[X]
             return "array"
         elif py_type.__origin__ is dict: # Dict[K, V]
@@ -428,12 +451,12 @@ def get_json_schema_type(py_type: Any) -> str:
     return TYPE_MAP.get(py_type, "string") # Default to string if not found
 
 def tool_spec(
-    func: Optional[Callable] = None,
+    func: Optional[Callable[..., Any]] = None,
     *,
     mathematical_basis: Optional[str] = None,
     confidence_factors: Optional[List[str]] = None,
     confidence_formula: Optional[str] = None,
-) -> Callable:
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Enhanced decorator to attach a JSON Schema tool specification to a function.
     The spec is derived from the function's signature and docstring.
@@ -445,9 +468,9 @@ def tool_spec(
         to `_detect_mathematical_reasoning` to infer metadata for backward compatibility.
     """
 
-    def decorator(fn: Callable) -> Callable:
+    def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(fn)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             return fn(*args, **kwargs)
 
         signature = inspect.signature(fn)
@@ -461,9 +484,9 @@ def tool_spec(
             param_type = param.annotation if param.annotation is not inspect.Parameter.empty else Any
             json_type = get_json_schema_type(param_type)
 
-            param_info = {"type": json_type}
+            param_info: Dict[str, Any] = {"type": json_type}
             if hasattr(param_type, '__origin__') and param_type.__origin__ is list:
-                if param_type.__args__:
+                if hasattr(param_type, '__args__') and param_type.__args__:
                     param_info["items"] = {"type": get_json_schema_type(param_type.__args__[0])}
 
             parameters[name] = param_info
@@ -494,6 +517,10 @@ def tool_spec(
             confidence_doc = f"Confidence calculation based on: {', '.join(confidence_factors)}"
             is_mathematical = True
 
+        # If mathematical_basis is explicitly provided, this is mathematical reasoning
+        if mathematical_basis:
+            is_mathematical = True
+
         # Fallback to heuristic detection if explicit metadata is not provided
         if not is_mathematical and not final_mathematical_basis:
             is_mathematical_heuristic, confidence_doc_heuristic, mathematical_basis_heuristic = _detect_mathematical_reasoning(fn)
@@ -520,7 +547,7 @@ def tool_spec(
             'metadata': metadata
         })
 
-        wrapper.tool_spec = tool_specification
+        setattr(wrapper, 'tool_spec', tool_specification)
         TOOL_REGISTRY.append(wrapper)
 
         return wrapper

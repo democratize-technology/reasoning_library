@@ -6,10 +6,8 @@ pattern recognition in numerical sequences.
 """
 import numpy as np
 from typing import List, Optional, Any, Dict, Union
-try:
-    from .core import curry, ReasoningStep, ReasoningChain, tool_spec
-except ImportError:
-    from core import curry, ReasoningStep, ReasoningChain, tool_spec
+import numpy.typing as npt
+from .core import curry, ReasoningStep, ReasoningChain, tool_spec
 
 
 def _assess_data_sufficiency(sequence_length: int, pattern_type: str) -> float:
@@ -24,7 +22,7 @@ def _assess_data_sufficiency(sequence_length: int, pattern_type: str) -> float:
         float: Data sufficiency factor (0.0-1.0)
     """
     if pattern_type == 'arithmetic':
-        minimum_required = 3
+        minimum_required = 4
     elif pattern_type == 'geometric':
         minimum_required = 4
     else:
@@ -33,7 +31,7 @@ def _assess_data_sufficiency(sequence_length: int, pattern_type: str) -> float:
     return min(1.0, sequence_length / minimum_required)
 
 
-def _calculate_pattern_quality_score(values: Union[np.ndarray, List[float]], pattern_type: str) -> float:
+def _calculate_pattern_quality_score(values: Union[npt.NDArray[np.floating[Any]], List[float]], pattern_type: str) -> float:
     """
     Calculate pattern quality based on statistical variance metrics.
 
@@ -57,7 +55,7 @@ def _calculate_pattern_quality_score(values: Union[np.ndarray, List[float]], pat
         # Amplify variance penalty by using standard deviation relative to mean (coefficient of variation)
         coefficient_of_variation = np.std(values_array) / (mean_abs_diff + 1e-10)
         # Use exponential decay to penalize noisy patterns more severely
-        return max(0.1, np.exp(-2.0 * coefficient_of_variation))
+        return float(max(0.1, np.exp(-2.0 * coefficient_of_variation)))
 
     elif pattern_type == 'geometric':
         # Use coefficient of variation for geometric progressions
@@ -65,12 +63,13 @@ def _calculate_pattern_quality_score(values: Union[np.ndarray, List[float]], pat
         if np.abs(mean_ratio) < 1e-10:  # Avoid division by zero
             return 0.1
         coefficient_of_variation = np.std(values_array) / (np.abs(mean_ratio) + 1e-10)
-        return max(0.1, 1.0 - coefficient_of_variation)
+        # Use exponential decay to penalize noisy patterns, similar to arithmetic
+        return float(max(0.1, np.exp(-2.0 * coefficient_of_variation)))
 
     return 0.5  # Default for unknown pattern types
 
 
-def _calculate_arithmetic_confidence(differences: np.ndarray, sequence_length: int, base_confidence: float = 0.95) -> float:
+def _calculate_arithmetic_confidence(differences: npt.NDArray[np.floating[Any]], sequence_length: int, base_confidence: float = 0.95) -> float:
     """
     Calculate confidence for arithmetic progression detection.
 
@@ -116,7 +115,7 @@ def _calculate_geometric_confidence(ratios: List[float], sequence_length: int, b
     pattern_quality_factor = _calculate_pattern_quality_score(ratios, 'geometric')
 
     # Complexity factor (geometric is slightly more complex than arithmetic)
-    complexity_factor = 1.0 / (1.0 + 0.2)  # complexity_score = 0.2 for geometric
+    complexity_factor = 1.0 / (1.0 + 0.1)  # complexity_score = 0.1 for geometric
 
     # Calculate final confidence
     confidence = base_confidence * data_sufficiency_factor * pattern_quality_factor * complexity_factor
@@ -130,7 +129,7 @@ def _calculate_geometric_confidence(ratios: List[float], sequence_length: int, b
     confidence_formula="base * data_sufficiency_factor * pattern_quality_factor * complexity_factor",
 )
 @curry
-def predict_next_in_sequence(sequence: List[float], reasoning_chain: Optional[ReasoningChain] = None, *, rtol: float = 0.3, atol: float = 1e-8) -> Optional[float]:
+def predict_next_in_sequence(sequence: List[float], reasoning_chain: Optional[ReasoningChain], *, rtol: float = 0.2, atol: float = 1e-8) -> Optional[float]:
     """
     Attempts to predict the next number in a sequence based on simple arithmetic
     or geometric progression.
@@ -138,7 +137,7 @@ def predict_next_in_sequence(sequence: List[float], reasoning_chain: Optional[Re
     Args:
         sequence (List[float]): A list of numbers (floats).
         reasoning_chain (Optional[ReasoningChain]): An optional ReasoningChain to add steps to.
-        rtol (float): Relative tolerance for pattern detection (default: 0.3 for 30% variance).
+        rtol (float): Relative tolerance for pattern detection (default: 0.2 for 20% variance).
         atol (float): Absolute tolerance for pattern detection (default: 1e-8).
 
     Returns:
@@ -169,7 +168,7 @@ def predict_next_in_sequence(sequence: List[float], reasoning_chain: Optional[Re
     # Check for arithmetic progression
     diffs = np.diff(sequence)
     if len(diffs) > 0 and np.allclose(diffs, diffs[0], rtol=rtol, atol=atol):
-        result = sequence[-1] + diffs[0]
+        result = float(sequence[-1] + diffs[0])
         confidence = _calculate_arithmetic_confidence(diffs, len(sequence))
         description = f"Identified arithmetic progression with common difference: {diffs[0]}. Predicted next: {result}"
         evidence = f"Common difference {diffs[0]} found in {diffs}. Confidence based on pattern quality and data sufficiency."
@@ -179,11 +178,11 @@ def predict_next_in_sequence(sequence: List[float], reasoning_chain: Optional[Re
 
     # Check for geometric progression
     if all(s != 0 for s in sequence):
-        ratios = [sequence[i] / sequence[i-1] for i in range(1, len(sequence))]
+        ratios_list = [sequence[i] / sequence[i-1] for i in range(1, len(sequence))]
         # Add bounds checking to prevent extreme values
-        ratios = np.clip(ratios, -1e6, 1e6)
+        ratios = list(np.clip(ratios_list, -1e6, 1e6))
         if len(ratios) > 0 and np.allclose(ratios, ratios[0], rtol=rtol, atol=atol):
-            result = sequence[-1] * ratios[0]
+            result = float(sequence[-1] * ratios[0])
             confidence = _calculate_geometric_confidence(ratios, len(sequence))
             description = f"Identified geometric progression with common ratio: {ratios[0]}. Predicted next: {result}"
             evidence = f"Common ratio {ratios[0]} found in {ratios}. Confidence based on pattern quality and data sufficiency."
@@ -201,14 +200,14 @@ def predict_next_in_sequence(sequence: List[float], reasoning_chain: Optional[Re
     confidence_factors=["data_sufficiency", "pattern_quality", "complexity"],
 )
 @curry
-def find_pattern_description(sequence: List[float], reasoning_chain: Optional[ReasoningChain] = None, *, rtol: float = 0.3, atol: float = 1e-8) -> str:
+def find_pattern_description(sequence: List[float], reasoning_chain: Optional[ReasoningChain], *, rtol: float = 0.2, atol: float = 1e-8) -> str:
     """
     Describes the pattern found in a numerical sequence.
 
     Args:
         sequence (List[float]): A list of numbers (floats).
         reasoning_chain (Optional[ReasoningChain]): An optional ReasoningChain to add steps to.
-        rtol (float): Relative tolerance for pattern detection (default: 0.3 for 30% variance).
+        rtol (float): Relative tolerance for pattern detection (default: 0.2 for 20% variance).
         atol (float): Absolute tolerance for pattern detection (default: 1e-8).
 
     Returns:
@@ -249,9 +248,9 @@ def find_pattern_description(sequence: List[float], reasoning_chain: Optional[Re
 
     # Check for geometric progression
     if all(s != 0 for s in sequence):
-        ratios = [sequence[i] / sequence[i-1] for i in range(1, len(sequence))]
+        ratios_list2 = [sequence[i] / sequence[i-1] for i in range(1, len(sequence))]
         # Add bounds checking to prevent extreme values
-        ratios = np.clip(ratios, -1e6, 1e6)
+        ratios = list(np.clip(ratios_list2, -1e6, 1e6))
         if len(ratios) > 0 and np.allclose(ratios, ratios[0], rtol=rtol, atol=atol):
             result_str = f'Geometric progression with common ratio: {ratios[0]}'
             # Use higher base confidence for pattern description than prediction
