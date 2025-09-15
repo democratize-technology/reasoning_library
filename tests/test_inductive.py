@@ -5,25 +5,31 @@ Comprehensive test suite for inductive.py module.
 Tests pattern recognition, confidence scoring, numpy dependency handling,
 edge cases, and statistical analysis functionality.
 """
-import sys
 import os
+import sys
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 # Handle numpy import gracefully
 try:
     import numpy as np
+
     NUMPY_AVAILABLE = True
 except ImportError:
     NUMPY_AVAILABLE = False
     print("⚠️  NumPy not available - some tests will be skipped")
 
-from reasoning_library.inductive import (
-    predict_next_in_sequence, find_pattern_description,
-    _assess_data_sufficiency, _calculate_pattern_quality_score,
-    _calculate_arithmetic_confidence, _calculate_geometric_confidence
-)
 from reasoning_library.core import ReasoningChain, ReasoningStep
+from reasoning_library.inductive import (
+    _assess_data_sufficiency,
+    _calculate_arithmetic_confidence,
+    _calculate_geometric_confidence,
+    _calculate_pattern_quality_score,
+    find_pattern_description,
+    predict_next_in_sequence,
+)
+
 
 @pytest.mark.skipif(not NUMPY_AVAILABLE, reason="NumPy not available")
 class TestNumpyDependentFunctions:
@@ -104,6 +110,7 @@ class TestNumpyDependentFunctions:
         assert len(chain.steps) == 1
         assert chain.steps[0].confidence == 0.0
 
+
 class TestInputValidation:
     """Test input validation and error handling."""
 
@@ -120,10 +127,14 @@ class TestInputValidation:
         invalid_inputs = ["not a list", 123, None, {"not": "list"}]
 
         for invalid_input in invalid_inputs:
-            with pytest.raises(TypeError, match="Expected list/tuple/array for sequence"):
+            with pytest.raises(
+                TypeError, match="Expected list/tuple/array for sequence"
+            ):
                 predict_next_in_sequence(invalid_input, reasoning_chain=None)
 
-            with pytest.raises(TypeError, match="Expected list/tuple/array for sequence"):
+            with pytest.raises(
+                TypeError, match="Expected list/tuple/array for sequence"
+            ):
                 find_pattern_description(invalid_input, reasoning_chain=None)
 
     @pytest.mark.skipif(not NUMPY_AVAILABLE, reason="NumPy not available")
@@ -152,6 +163,7 @@ class TestInputValidation:
 
         description = find_pattern_description([42], reasoning_chain=chain)
         assert description == "Sequence too short to determine a pattern."
+
 
 class TestEdgeCases:
     """Test edge cases and boundary conditions."""
@@ -236,6 +248,7 @@ class TestEdgeCases:
         result = predict_next_in_sequence(sequence, reasoning_chain=None, rtol=0.5)
         assert result is not None
 
+
 class TestConfidenceScoring:
     """Test confidence scoring algorithms."""
 
@@ -243,14 +256,14 @@ class TestConfidenceScoring:
     def test_data_sufficiency_assessment(self):
         """Test data sufficiency factor calculation."""
         # Test arithmetic requirements
-        assert _assess_data_sufficiency(4, 'arithmetic') == 1.0  # Minimum required
-        assert _assess_data_sufficiency(3, 'arithmetic') < 1.0   # Below minimum
-        assert _assess_data_sufficiency(6, 'arithmetic') == 1.0  # Above minimum
+        assert _assess_data_sufficiency(4, "arithmetic") == 1.0  # Minimum required
+        assert _assess_data_sufficiency(3, "arithmetic") < 1.0  # Below minimum
+        assert _assess_data_sufficiency(6, "arithmetic") == 1.0  # Above minimum
 
         # Test geometric requirements
-        assert _assess_data_sufficiency(4, 'geometric') == 1.0   # Minimum required
-        assert _assess_data_sufficiency(3, 'geometric') < 1.0    # Below minimum
-        assert _assess_data_sufficiency(8, 'geometric') == 1.0   # Above minimum
+        assert _assess_data_sufficiency(4, "geometric") == 1.0  # Minimum required
+        assert _assess_data_sufficiency(3, "geometric") < 1.0  # Below minimum
+        assert _assess_data_sufficiency(8, "geometric") == 1.0  # Above minimum
 
     @pytest.mark.skipif(not NUMPY_AVAILABLE, reason="NumPy not available")
     def test_pattern_quality_scoring(self):
@@ -259,17 +272,17 @@ class TestConfidenceScoring:
 
         # Perfect arithmetic pattern
         perfect_diffs = np.array([1, 1, 1, 1])
-        quality = _calculate_pattern_quality_score(perfect_diffs, 'arithmetic')
+        quality = _calculate_pattern_quality_score(perfect_diffs, "arithmetic")
         assert quality > 0.9  # Should be very high
 
         # Noisy arithmetic pattern
         noisy_diffs = np.array([1, 1.5, 0.5, 1])
-        quality = _calculate_pattern_quality_score(noisy_diffs, 'arithmetic')
+        quality = _calculate_pattern_quality_score(noisy_diffs, "arithmetic")
         assert 0.1 < quality < 0.9  # Should be moderate
 
         # Perfect geometric pattern
         perfect_ratios = [2, 2, 2, 2]
-        quality = _calculate_pattern_quality_score(perfect_ratios, 'geometric')
+        quality = _calculate_pattern_quality_score(perfect_ratios, "geometric")
         assert quality > 0.8  # Should be high
 
     @pytest.mark.skipif(not NUMPY_AVAILABLE, reason="NumPy not available")
@@ -310,6 +323,7 @@ class TestConfidenceScoring:
         confidence = _calculate_geometric_confidence(noisy_ratios, 5)
         assert 0.1 < confidence < 0.7
 
+
 class TestCurryingFunctionality:
     """Test currying functionality of inductive functions."""
 
@@ -343,6 +357,7 @@ class TestCurryingFunctionality:
         description = describe_sequence(reasoning_chain=chain)
         assert "Arithmetic progression" in description
         assert len(chain.steps) == 1
+
 
 class TestReasoningChainIntegration:
     """Test integration with ReasoningChain."""
@@ -404,32 +419,34 @@ class TestReasoningChainIntegration:
         assert len(chain.steps) == 2
         assert chain.steps[0].description != chain.steps[1].description
 
+
 class TestToolSpecMetadata:
     """Test tool specification metadata for inductive functions."""
 
     def test_predict_next_in_sequence_tool_spec(self):
         """Test tool spec metadata for predict_next_in_sequence."""
-        assert hasattr(predict_next_in_sequence, 'tool_spec')
+        assert hasattr(predict_next_in_sequence, "tool_spec")
 
         spec = predict_next_in_sequence.tool_spec
-        assert spec['type'] == 'function'
-        assert spec['function']['name'] == 'predict_next_in_sequence'
-        assert 'sequence' in spec['function']['parameters']['properties']
-        assert 'reasoning_chain' not in spec['function']['parameters']['properties']
+        assert spec["type"] == "function"
+        assert spec["function"]["name"] == "predict_next_in_sequence"
+        assert "sequence" in spec["function"]["parameters"]["properties"]
+        assert "reasoning_chain" not in spec["function"]["parameters"]["properties"]
 
     def test_find_pattern_description_tool_spec(self):
         """Test tool spec metadata for find_pattern_description."""
-        assert hasattr(find_pattern_description, 'tool_spec')
+        assert hasattr(find_pattern_description, "tool_spec")
 
         spec = find_pattern_description.tool_spec
-        assert spec['type'] == 'function'
-        assert spec['function']['name'] == 'find_pattern_description'
-        assert 'sequence' in spec['function']['parameters']['properties']
+        assert spec["type"] == "function"
+        assert spec["function"]["name"] == "find_pattern_description"
+        assert "sequence" in spec["function"]["parameters"]["properties"]
+
 
 class TestNumpyFallbackHandling:
     """Test handling when numpy is not available."""
 
-    @patch('sys.modules', {'numpy': None})
+    @patch("sys.modules", {"numpy": None})
     def test_graceful_numpy_import_failure(self):
         """Test graceful handling when numpy import fails."""
         # This test simulates what happens when numpy is not available
@@ -450,6 +467,7 @@ class TestNumpyFallbackHandling:
             # This is expected behavior in that case
             pass
 
+
 def run_all_tests():
     """Run all inductive reasoning tests with detailed output."""
     print("🧪 Running comprehensive test suite for inductive.py...")
@@ -463,7 +481,7 @@ def run_all_tests():
         TestCurryingFunctionality,
         TestReasoningChainIntegration,
         TestToolSpecMetadata,
-        TestNumpyFallbackHandling
+        TestNumpyFallbackHandling,
     ]
 
     # Add numpy-dependent tests if available
@@ -479,13 +497,15 @@ def run_all_tests():
     for test_class in test_classes:
         print(f"\n📝 Testing {test_class.__name__}...")
 
-        test_methods = [method for method in dir(test_class) if method.startswith('test_')]
+        test_methods = [
+            method for method in dir(test_class) if method.startswith("test_")
+        ]
 
         for method_name in test_methods:
             total_tests += 1
             try:
                 instance = test_class()
-                if hasattr(instance, 'setup_method'):
+                if hasattr(instance, "setup_method"):
                     instance.setup_method()
 
                 method = getattr(instance, method_name)
@@ -516,8 +536,11 @@ def run_all_tests():
     else:
         print(f"\n🎉 All inductive reasoning tests passed!")
         if skipped_tests > 0:
-            print(f"   (Note: {skipped_tests} tests were skipped due to missing dependencies)")
+            print(
+                f"   (Note: {skipped_tests} tests were skipped due to missing dependencies)"
+            )
         return True
+
 
 if __name__ == "__main__":
     success = run_all_tests()

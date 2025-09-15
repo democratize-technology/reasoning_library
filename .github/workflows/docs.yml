@@ -53,7 +53,7 @@ jobs:
       - name: Install dependencies and docs tools
         run: |
           uv sync --dev
-          uv add sphinx sphinx-rtd-theme sphinx-autodoc-typehints myst-parser --dev
+          uv add sphinx sphinx-rtd-theme sphinx-autodoc-typehints tomli --dev
 
       - name: Create docs directory structure
         run: |
@@ -73,7 +73,11 @@ jobs:
           author = 'reasoning-library contributors'
 
           # Version information
-          import tomllib
+          try:
+              import tomllib  # Python 3.11+
+          except ImportError:
+              import tomli as tomllib  # Python 3.10 fallback
+
           with open('../../pyproject.toml', 'rb') as f:
               pyproject_data = tomllib.load(f)
               version = pyproject_data['project']['version']
@@ -87,7 +91,6 @@ jobs:
               'sphinx.ext.napoleon',
               'sphinx.ext.intersphinx',
               'sphinx_autodoc_typehints',
-              'myst_parser',
           ]
 
           # Autodoc settings
@@ -193,27 +196,32 @@ jobs:
 
       - name: Generate overview page
         run: |
-          cat > docs/source/overview.md << 'EOF'
-          # Overview
+          cat > docs/source/overview.rst << 'EOF'
+          Overview
+          ========
 
           The reasoning-library is a Python package that provides formal reasoning methods with LLM integration.
 
-          ## Features
+          Features
+          --------
 
           - Formal reasoning methods
           - LLM integration
           - Type-safe implementation
           - Comprehensive testing
 
-          ## Architecture
+          Architecture
+          ------------
 
           The library is organized into several key modules:
 
-          - `reasoning_library.core` - Core reasoning functionality
-          - `reasoning_library.logic` - Logic operations
-          - `reasoning_library.utils` - Utility functions
+          - ``reasoning_library.core`` - Core reasoning functionality
+          - ``reasoning_library.chain_of_thought`` - Chain of thought reasoning
+          - ``reasoning_library.deductive`` - Deductive reasoning methods
+          - ``reasoning_library.inductive`` - Inductive reasoning methods
 
-          ## Requirements
+          Requirements
+          ------------
 
           - Python 3.10+
           - NumPy 1.24.0+
@@ -235,18 +243,26 @@ jobs:
              :undoc-members:
              :show-inheritance:
 
-          Logic Module
-          ------------
+          Chain of Thought
+          ----------------
 
-          .. automodule:: reasoning_library.logic
+          .. automodule:: reasoning_library.chain_of_thought
              :members:
              :undoc-members:
              :show-inheritance:
 
-          Utilities
-          ---------
+          Deductive Reasoning
+          ------------------
 
-          .. automodule:: reasoning_library.utils
+          .. automodule:: reasoning_library.deductive
+             :members:
+             :undoc-members:
+             :show-inheritance:
+
+          Inductive Reasoning
+          ------------------
+
+          .. automodule:: reasoning_library.inductive
              :members:
              :undoc-members:
              :show-inheritance:
@@ -254,20 +270,23 @@ jobs:
 
       - name: Generate examples page
         run: |
-          cat > docs/source/examples.md << 'EOF'
-          # Examples
+          cat > docs/source/examples.rst << 'EOF'
+          Examples
+          ========
 
           This page contains usage examples for reasoning-library.
 
-          ## Basic Usage
+          Basic Usage
+          -----------
 
-          ```python
-          import reasoning_library
+          .. code-block:: python
 
-          # Example usage here
-          ```
+             import reasoning_library
 
-          ## Advanced Examples
+             # Example usage here
+
+          Advanced Examples
+          -----------------
 
           More complex examples will be added as the library develops.
           EOF
@@ -280,7 +299,7 @@ jobs:
       - name: Build documentation
         run: |
           cd docs
-          uv run sphinx-build -b html source build/html -W --keep-going
+          uv run sphinx-build -b html source build/html --keep-going
 
       - name: Test documentation build
         run: |

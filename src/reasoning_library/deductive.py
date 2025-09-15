@@ -4,14 +4,18 @@ Deductive Reasoning Module.
 This module provides functions for deductive logic, including basic logical operations
 and the Modus Ponens rule, implemented using a functional programming style.
 """
-from typing import Callable, Any, Optional, List, Tuple
-from .core import curry, ReasoningStep, ReasoningChain, tool_spec
+
+from typing import Any, Callable, List, Optional, Tuple
+
+from .core import ReasoningChain, ReasoningStep, curry, tool_spec
 
 # --- Base Logical Primitives (Pure Functions) ---
+
 
 @curry
 def logical_not(p: bool) -> bool:
     return not p
+
 
 def logical_not_with_confidence(p: bool) -> Tuple[bool, float]:
     """
@@ -31,9 +35,11 @@ def logical_not_with_confidence(p: bool) -> Tuple[bool, float]:
     result = not p
     return result, 1.0
 
+
 @curry
 def logical_and(p: bool, q: bool) -> bool:
     return p and q
+
 
 def logical_and_with_confidence(p: bool, q: bool) -> Tuple[bool, float]:
     """
@@ -56,9 +62,11 @@ def logical_and_with_confidence(p: bool, q: bool) -> Tuple[bool, float]:
     result = p and q
     return result, 1.0
 
+
 @curry
 def logical_or(p: bool, q: bool) -> bool:
     return p or q
+
 
 def logical_or_with_confidence(p: bool, q: bool) -> Tuple[bool, float]:
     """
@@ -81,10 +89,12 @@ def logical_or_with_confidence(p: bool, q: bool) -> Tuple[bool, float]:
     result = p or q
     return result, 1.0
 
+
 @curry
 def implies(p: bool, q: bool) -> bool:
     """Logical IMPLICATION (P -> Q is equivalent to NOT P OR Q)."""
     return bool(logical_or(logical_not(p), q))
+
 
 def implies_with_confidence(p: bool, q: bool) -> Tuple[bool, float]:
     """
@@ -107,7 +117,9 @@ def implies_with_confidence(p: bool, q: bool) -> Tuple[bool, float]:
     result = logical_or(logical_not(p), q)
     return result, 1.0
 
+
 # --- Composed Deductive Reasoning: Modus Ponens ---
+
 
 @curry
 def check_modus_ponens_premises(p: bool, q: bool) -> bool:
@@ -116,6 +128,7 @@ def check_modus_ponens_premises(p: bool, q: bool) -> bool:
     (P -> Q) AND P
     """
     return bool(logical_and(implies(p, q), p))
+
 
 def check_modus_ponens_premises_with_confidence(p: bool, q: bool) -> Tuple[bool, float]:
     """
@@ -139,12 +152,17 @@ def check_modus_ponens_premises_with_confidence(p: bool, q: bool) -> Tuple[bool,
     # For modus ponens premises: confidence is always 1.0 since it's a deterministic logical check
     return result, 1.0
 
+
 @tool_spec(
     mathematical_basis="Formal deductive logic using Modus Ponens inference rule",
     confidence_factors=["premise_truth_value"],
 )
 @curry
-def apply_modus_ponens(p_is_true: bool, p_implies_q_is_true: bool, reasoning_chain: Optional[ReasoningChain] = None) -> Optional[bool]:
+def apply_modus_ponens(
+    p_is_true: bool,
+    p_implies_q_is_true: bool,
+    reasoning_chain: Optional[ReasoningChain] = None,
+) -> Optional[bool]:
     """
     Applies the Modus Ponens rule: If P is true and (P -> Q) is true, then Q is true.
 
@@ -178,17 +196,22 @@ def apply_modus_ponens(p_is_true: bool, p_implies_q_is_true: bool, reasoning_cha
             result=conclusion,
             confidence=confidence,
             evidence=evidence,
-            assumptions=assumptions
+            assumptions=assumptions,
         )
     return conclusion
 
+
 # --- Higher-Order Function for Chaining Deductions ---
 
-def chain_deductions(reasoning_chain: ReasoningChain, *functions: Callable[[Any], Any]) -> Callable[[Any], Any]:
+
+def chain_deductions(
+    reasoning_chain: ReasoningChain, *functions: Callable[[Any], Any]
+) -> Callable[[Any], Any]:
     """
     Composes multiple deductive functions into a single chain, adding steps to the provided ReasoningChain.
     Each function in the chain takes the output of the previous one as input.
     """
+
     def composed_function(initial_input: Any) -> Any:
         result = initial_input
         for i, func in enumerate(functions):
@@ -196,8 +219,9 @@ def chain_deductions(reasoning_chain: ReasoningChain, *functions: Callable[[Any]
             # If the function itself adds to the chain, it should handle that internally.
             # If a function returns None, it means deduction failed at that step.
             result = func(result)
-            if result is None: # If any step fails to deduce, the chain breaks
+            if result is None:  # If any step fails to deduce, the chain breaks
                 # The individual function should have added a step indicating failure
                 return None
         return result
+
     return composed_function

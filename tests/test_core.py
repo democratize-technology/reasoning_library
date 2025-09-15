@@ -5,24 +5,38 @@ Comprehensive test suite for core.py module.
 Tests ReasoningChain, ReasoningStep, tool registry, security features,
 and mathematical reasoning detection.
 """
-import sys
 import os
+import sys
 import threading
 import time
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from reasoning_library.core import (
-    ReasoningChain, ReasoningStep, curry, tool_spec,
-    get_tool_specs, get_openai_tools, get_bedrock_tools,
-    get_enhanced_tool_registry, ToolMetadata,
-    _detect_mathematical_reasoning, _safe_copy_spec,
-    _openai_format, _bedrock_format,
-    TOOL_REGISTRY, ENHANCED_TOOL_REGISTRY,
-    TYPE_MAP, get_json_schema_type,
+    COMMENT_PATTERN,
+    ENHANCED_TOOL_REGISTRY,
+    EVIDENCE_PATTERN,
+    FACTOR_PATTERN,
     MAX_SOURCE_CODE_SIZE,
-    FACTOR_PATTERN, COMMENT_PATTERN, EVIDENCE_PATTERN
+    TOOL_REGISTRY,
+    TYPE_MAP,
+    ReasoningChain,
+    ReasoningStep,
+    ToolMetadata,
+    _bedrock_format,
+    _detect_mathematical_reasoning,
+    _openai_format,
+    _safe_copy_spec,
+    curry,
+    get_bedrock_tools,
+    get_enhanced_tool_registry,
+    get_json_schema_type,
+    get_openai_tools,
+    get_tool_specs,
+    tool_spec,
 )
+
 
 class TestReasoningStep:
     """Test ReasoningStep dataclass functionality."""
@@ -33,7 +47,7 @@ class TestReasoningStep:
             step_number=1,
             stage="Analysis",
             description="Test step",
-            result="test result"
+            result="test result",
         )
 
         assert step.step_number == 1
@@ -58,7 +72,7 @@ class TestReasoningStep:
             confidence=0.85,
             evidence="Supporting evidence",
             assumptions=assumptions,
-            metadata=metadata
+            metadata=metadata,
         )
 
         assert step.step_number == 2
@@ -67,6 +81,7 @@ class TestReasoningStep:
         assert step.evidence == "Supporting evidence"
         assert step.assumptions == assumptions
         assert step.metadata == metadata
+
 
 class TestReasoningChain:
     """Test ReasoningChain functionality."""
@@ -84,9 +99,7 @@ class TestReasoningChain:
     def test_add_single_step(self):
         """Test adding a single step."""
         step = self.chain.add_step(
-            stage="Analysis",
-            description="First step",
-            result="result1"
+            stage="Analysis", description="First step", result="result1"
         )
 
         assert len(self.chain.steps) == 1
@@ -129,7 +142,7 @@ class TestReasoningChain:
             confidence=0.95,
             evidence="Strong evidence",
             assumptions=["Data is valid"],
-            metadata={"source": "test"}
+            metadata={"source": "test"},
         )
 
         summary = self.chain.get_summary()
@@ -142,11 +155,13 @@ class TestReasoningChain:
         assert "Assumptions: Data is valid" in summary
         assert "Metadata: {'source': 'test'}" in summary
 
+
 class TestCurryDecorator:
     """Test curry decorator functionality."""
 
     def test_curry_basic_function(self):
         """Test currying a basic function."""
+
         @curry
         def add_three(a, b, c):
             return a + b + c
@@ -165,6 +180,7 @@ class TestCurryDecorator:
 
     def test_curry_with_kwargs(self):
         """Test curry with keyword arguments."""
+
         @curry
         def multiply_with_default(a, b, c=1):
             return a * b * c
@@ -176,6 +192,7 @@ class TestCurryDecorator:
         double = multiply_with_default(2)
         assert double(3) == 6
 
+
 class TestToolSpec:
     """Test tool_spec decorator and related functionality."""
 
@@ -186,6 +203,7 @@ class TestToolSpec:
 
     def test_basic_tool_spec(self):
         """Test basic tool specification generation."""
+
         @tool_spec
         def simple_function(x: int, y: str = "default") -> bool:
             """A simple test function."""
@@ -196,28 +214,29 @@ class TestToolSpec:
         assert simple_function(1, "test") == True
 
         # Check tool spec was generated
-        assert hasattr(simple_function, 'tool_spec')
+        assert hasattr(simple_function, "tool_spec")
         spec = simple_function.tool_spec
 
-        assert spec['type'] == 'function'
-        assert spec['function']['name'] == 'simple_function'
-        assert spec['function']['description'] == 'A simple test function.'
+        assert spec["type"] == "function"
+        assert spec["function"]["name"] == "simple_function"
+        assert spec["function"]["description"] == "A simple test function."
 
         # Check parameters
-        params = spec['function']['parameters']
-        assert params['type'] == 'object'
-        assert 'x' in params['properties']
-        assert 'y' in params['properties']
-        assert params['properties']['x']['type'] == 'integer'
-        assert params['properties']['y']['type'] == 'string'
-        assert params['required'] == ['x']  # y has default
+        params = spec["function"]["parameters"]
+        assert params["type"] == "object"
+        assert "x" in params["properties"]
+        assert "y" in params["properties"]
+        assert params["properties"]["x"]["type"] == "integer"
+        assert params["properties"]["y"]["type"] == "string"
+        assert params["required"] == ["x"]  # y has default
 
     def test_tool_spec_with_mathematical_metadata(self):
         """Test tool_spec with explicit mathematical metadata."""
+
         @tool_spec(
             mathematical_basis="Test mathematical reasoning",
             confidence_factors=["factor1", "factor2"],
-            confidence_formula="factor1 * factor2"
+            confidence_formula="factor1 * factor2",
         )
         def math_function(confidence: float) -> float:
             """Mathematical reasoning function."""
@@ -227,24 +246,26 @@ class TestToolSpec:
         assert len(ENHANCED_TOOL_REGISTRY) == 1
         entry = ENHANCED_TOOL_REGISTRY[0]
 
-        assert entry['metadata'].is_mathematical_reasoning == True
-        assert entry['metadata'].mathematical_basis == "Test mathematical reasoning"
-        assert entry['metadata'].confidence_factors == ["factor1", "factor2"]
-        assert entry['metadata'].confidence_formula == "factor1 * factor2"
+        assert entry["metadata"].is_mathematical_reasoning == True
+        assert entry["metadata"].mathematical_basis == "Test mathematical reasoning"
+        assert entry["metadata"].confidence_factors == ["factor1", "factor2"]
+        assert entry["metadata"].confidence_formula == "factor1 * factor2"
 
     def test_reasoning_chain_parameter_excluded(self):
         """Test that reasoning_chain parameter is excluded from tool spec."""
+
         @tool_spec
         def function_with_reasoning_chain(x: int, reasoning_chain=None) -> int:
             """Function with reasoning chain parameter."""
             return x * 2
 
         spec = function_with_reasoning_chain.tool_spec
-        params = spec['function']['parameters']
+        params = spec["function"]["parameters"]
 
-        assert 'x' in params['properties']
-        assert 'reasoning_chain' not in params['properties']
-        assert params['required'] == ['x']
+        assert "x" in params["properties"]
+        assert "reasoning_chain" not in params["properties"]
+        assert params["required"] == ["x"]
+
 
 class TestSecurityFeatures:
     """Test security features and protections."""
@@ -258,16 +279,16 @@ class TestSecurityFeatures:
             "function": {
                 "name": "test_func",
                 "description": "Test function",
-                "parameters": {"type": "object"}
-            }
+                "parameters": {"type": "object"},
+            },
         }
 
         safe_spec = _safe_copy_spec(tool_spec)
 
-        assert safe_spec['type'] == 'function'
-        assert safe_spec['function']['name'] == 'test_func'
-        assert safe_spec['function']['description'] == 'Test function'
-        assert safe_spec['function']['parameters'] == {"type": "object"}
+        assert safe_spec["type"] == "function"
+        assert safe_spec["function"]["name"] == "test_func"
+        assert safe_spec["function"]["description"] == "Test function"
+        assert safe_spec["function"]["parameters"] == {"type": "object"}
 
     def test_safe_copy_spec_filters_dangerous_keys(self):
         """Test that safe copy filters out non-whitelisted keys."""
@@ -282,18 +303,18 @@ class TestSecurityFeatures:
                 "description": "test",
                 "parameters": {},
                 "__proto__": "also_bad",
-                "malicious_key": "filtered"
-            }
+                "malicious_key": "filtered",
+            },
         }
 
         safe_spec = _safe_copy_spec(dangerous_spec)
 
         assert "__proto__" not in safe_spec
         assert "constructor" not in safe_spec
-        assert "__proto__" not in safe_spec['function']
-        assert "malicious_key" not in safe_spec['function']
+        assert "__proto__" not in safe_spec["function"]
+        assert "malicious_key" not in safe_spec["function"]
         assert len(safe_spec) == 2  # Only type and function
-        assert len(safe_spec['function']) == 3  # Only name, description, parameters
+        assert len(safe_spec["function"]) == 3  # Only name, description, parameters
 
     def test_safe_copy_spec_validation(self):
         """Test input validation in safe copy."""
@@ -303,10 +324,14 @@ class TestSecurityFeatures:
         with pytest.raises(ValueError, match="Tool specification must be a dictionary"):
             _safe_copy_spec("not a dict")
 
-        with pytest.raises(ValueError, match="Tool specification must contain 'function' key"):
+        with pytest.raises(
+            ValueError, match="Tool specification must contain 'function' key"
+        ):
             _safe_copy_spec({"type": "function"})
 
-        with pytest.raises(ValueError, match="Tool specification 'function' value must be a dictionary"):
+        with pytest.raises(
+            ValueError, match="Tool specification 'function' value must be a dictionary"
+        ):
             _safe_copy_spec({"type": "function", "function": "not a dict"})
 
     def test_redos_protection_source_size_limit(self):
@@ -318,9 +343,10 @@ class TestSecurityFeatures:
     def test_regex_patterns_compiled(self):
         """Test that regex patterns are pre-compiled for performance."""
         # These should be compiled regex patterns, not strings
-        assert hasattr(FACTOR_PATTERN, 'pattern')
-        assert hasattr(COMMENT_PATTERN, 'pattern')
-        assert hasattr(EVIDENCE_PATTERN, 'pattern')
+        assert hasattr(FACTOR_PATTERN, "pattern")
+        assert hasattr(COMMENT_PATTERN, "pattern")
+        assert hasattr(EVIDENCE_PATTERN, "pattern")
+
 
 class TestMathematicalReasoningDetection:
     """Test mathematical reasoning detection functionality."""
@@ -362,11 +388,14 @@ class TestMathematicalReasoningDetection:
             """Applies modus ponens reasoning rule."""
             return True
 
-        is_math, conf_doc, math_basis = _detect_mathematical_reasoning(modus_ponens_func)
+        is_math, conf_doc, math_basis = _detect_mathematical_reasoning(
+            modus_ponens_func
+        )
 
         assert is_math == True
         if math_basis:
             assert "modus ponens" in math_basis.lower()
+
 
 class TestTypeMapping:
     """Test JSON Schema type mapping functionality."""
@@ -383,26 +412,31 @@ class TestTypeMapping:
     def test_optional_type_mapping(self):
         """Test Optional type handling."""
         from typing import Optional
+
         assert get_json_schema_type(Optional[str]) == "string"
         assert get_json_schema_type(Optional[int]) == "integer"
 
     def test_list_type_mapping(self):
         """Test List type handling."""
         from typing import List
+
         assert get_json_schema_type(List[str]) == "array"
         assert get_json_schema_type(List[int]) == "array"
 
     def test_dict_type_mapping(self):
         """Test Dict type handling."""
         from typing import Dict
+
         assert get_json_schema_type(Dict[str, int]) == "object"
 
     def test_unknown_type_defaults(self):
         """Test unknown types default to string."""
+
         class CustomType:
             pass
 
         assert get_json_schema_type(CustomType) == "string"
+
 
 class TestToolExportFormats:
     """Test tool export to different API formats."""
@@ -426,11 +460,11 @@ class TestToolExportFormats:
         assert len(openai_tools) == 1
         tool = openai_tools[0]
 
-        assert tool['type'] == 'function'
-        assert 'function' in tool
-        assert tool['function']['name'] == 'test_export_function'
-        assert 'Test function for export' in tool['function']['description']
-        assert 'Mathematical Basis: Test math' in tool['function']['description']
+        assert tool["type"] == "function"
+        assert "function" in tool
+        assert tool["function"]["name"] == "test_export_function"
+        assert "Test function for export" in tool["function"]["description"]
+        assert "Mathematical Basis: Test math" in tool["function"]["description"]
 
     def test_bedrock_format_export(self):
         """Test export to Bedrock format."""
@@ -439,10 +473,11 @@ class TestToolExportFormats:
         assert len(bedrock_tools) == 1
         tool = bedrock_tools[0]
 
-        assert 'toolSpec' in tool
-        assert tool['toolSpec']['name'] == 'test_export_function'
-        assert 'inputSchema' in tool['toolSpec']
-        assert 'json' in tool['toolSpec']['inputSchema']
+        assert "toolSpec" in tool
+        assert tool["toolSpec"]["name"] == "test_export_function"
+        assert "inputSchema" in tool["toolSpec"]
+        assert "json" in tool["toolSpec"]["inputSchema"]
+
 
 class TestThreadSafety:
     """Test thread safety of core components."""
@@ -459,7 +494,7 @@ class TestThreadSafety:
                     step = chain.add_step(
                         stage=f"Thread{thread_id}",
                         description=f"Step {i} from thread {thread_id}",
-                        result=f"result_{thread_id}_{i}"
+                        result=f"result_{thread_id}_{i}",
                     )
                     results.append(step.step_number)
                     time.sleep(0.001)  # Small delay to encourage race conditions
@@ -484,29 +519,32 @@ class TestThreadSafety:
         assert max(results) == 50
         assert min(results) == 1
 
+
 class TestEdgeCases:
     """Test edge cases and error conditions."""
 
     def test_empty_function_docstring(self):
         """Test tool_spec with function having no docstring."""
+
         @tool_spec
         def no_docstring_func():
             pass
 
         spec = no_docstring_func.tool_spec
-        assert spec['function']['description'] == ""
+        assert spec["function"]["description"] == ""
 
     def test_function_with_no_parameters(self):
         """Test tool_spec with function having no parameters."""
+
         @tool_spec
         def no_params_func():
             """Function with no parameters."""
             return True
 
         spec = no_params_func.tool_spec
-        params = spec['function']['parameters']
-        assert params['required'] == []
-        assert params['properties'] == {}
+        params = spec["function"]["parameters"]
+        assert params["required"] == []
+        assert params["properties"] == {}
 
     def test_reasoning_chain_with_none_values(self):
         """Test ReasoningChain handles None values gracefully."""
@@ -519,7 +557,7 @@ class TestEdgeCases:
             confidence=None,
             evidence=None,
             assumptions=None,
-            metadata=None
+            metadata=None,
         )
 
         assert step.result is None
@@ -534,13 +572,16 @@ class TestEdgeCases:
 
         # Create a function with extremely long source code
         def create_long_source_func():
-            exec(f"""
+            exec(
+                f"""
 def long_func():
     '''Function with confidence scoring.'''
     {'# ' + 'x' * 1000}
     return 0.95
-""", globals())
-            return globals()['long_func']
+""",
+                globals(),
+            )
+            return globals()["long_func"]
 
         long_func = create_long_source_func()
 
@@ -549,6 +590,7 @@ def long_func():
 
         # Should still detect mathematical reasoning despite long source
         assert isinstance(is_math, bool)
+
 
 def run_all_tests():
     """Run all tests with detailed output."""
@@ -565,7 +607,7 @@ def run_all_tests():
         TestTypeMapping,
         TestToolExportFormats,
         TestThreadSafety,
-        TestEdgeCases
+        TestEdgeCases,
     ]
 
     total_tests = 0
@@ -576,14 +618,16 @@ def run_all_tests():
         print(f"\n📝 Testing {test_class.__name__}...")
 
         # Get all test methods
-        test_methods = [method for method in dir(test_class) if method.startswith('test_')]
+        test_methods = [
+            method for method in dir(test_class) if method.startswith("test_")
+        ]
 
         for method_name in test_methods:
             total_tests += 1
             try:
                 # Create instance and run setup if exists
                 instance = test_class()
-                if hasattr(instance, 'setup_method'):
+                if hasattr(instance, "setup_method"):
                     instance.setup_method()
 
                 # Run the test method
@@ -611,6 +655,7 @@ def run_all_tests():
     else:
         print(f"\n🎉 All tests passed!")
         return True
+
 
 if __name__ == "__main__":
     success = run_all_tests()
