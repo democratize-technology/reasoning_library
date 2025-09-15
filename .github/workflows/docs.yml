@@ -53,7 +53,7 @@ jobs:
       - name: Install dependencies and docs tools
         run: |
           uv sync --dev
-          uv add sphinx sphinx-rtd-theme sphinx-autodoc-typehints myst-parser --dev
+          uv add sphinx sphinx-rtd-theme sphinx-autodoc-typehints myst-parser tomli --dev
 
       - name: Create docs directory structure
         run: |
@@ -73,7 +73,11 @@ jobs:
           author = 'reasoning-library contributors'
 
           # Version information
-          import tomllib
+          try:
+              import tomllib  # Python 3.11+
+          except ImportError:
+              import tomli as tomllib  # Python 3.10 fallback
+
           with open('../../pyproject.toml', 'rb') as f:
               pyproject_data = tomllib.load(f)
               version = pyproject_data['project']['version']
