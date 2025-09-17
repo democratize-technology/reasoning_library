@@ -53,7 +53,8 @@ jobs:
       - name: Install dependencies and docs tools
         run: |
           uv sync --dev
-          uv add sphinx sphinx-rtd-theme sphinx-autodoc-typehints tomli --dev
+          # Install documentation tools using uv run --with for isolated environments
+          echo "Installing documentation tools..."
 
       - name: Create docs directory structure
         run: |
@@ -299,7 +300,12 @@ jobs:
       - name: Build documentation
         run: |
           cd docs
-          uv run sphinx-build -b html source build/html --keep-going
+          uv run --with sphinx,sphinx-rtd-theme,sphinx-autodoc-typehints,tomli sphinx-build -b html source build/html --keep-going || {
+            echo "❌ Documentation build failed" >> $GITHUB_STEP_SUMMARY
+            echo "Attempting with verbose output..."
+            uv run --with sphinx,sphinx-rtd-theme,sphinx-autodoc-typehints,tomli sphinx-build -b html -v source build/html
+            exit 1
+          }
 
       - name: Test documentation build
         run: |
