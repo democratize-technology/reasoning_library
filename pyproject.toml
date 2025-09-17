@@ -125,3 +125,11 @@ strict_equality = true
 [[tool.mypy.overrides]]
 module = ["numpy.*"]
 ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "bandit[toml]>=1.8.6",
+    "pip-audit>=2.9.0",
+    "safety>=3.6.1",
+    "semgrep>=1.136.0",
+]

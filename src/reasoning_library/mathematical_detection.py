@@ -135,10 +135,7 @@ def _extract_confidence_factors(source_code: str, docstring: str) -> List[str]:
         factor_names = []
         for match in combination_matches[:2]:
             factor_names.extend(
-                [
-                    factor.replace("_factor", "").replace("_", " ")
-                    for factor in match
-                ]
+                [factor.replace("_factor", "").replace("_", " ") for factor in match]
             )
         confidence_factors.extend(list(set(factor_names)))  # Remove duplicates
 
