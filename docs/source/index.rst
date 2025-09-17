@@ -1,5 +1,5 @@
 reasoning-library Documentation
-=============================
+================================
 
 A Python library for formal reasoning methods with LLM integration.
 
@@ -12,14 +12,14 @@ A Python library for formal reasoning methods with LLM integration.
    examples
 
 Installation
------------
+------------
 
 .. code-block:: bash
 
    pip install reasoning-library
 
 Quick Start
-----------
+-----------
 
 .. code-block:: python
 
@@ -29,11 +29,7 @@ Quick Start
 API Reference
 ------------
 
-.. autosummary::
-   :toctree: _autosummary
-   :recursive:
-
-   reasoning_library
+For detailed API documentation, see :doc:`api`.
 
 Indices and tables
 ==================

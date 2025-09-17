@@ -15,7 +15,6 @@ release = "0.1.0"
 # Extensions
 extensions = [
     "sphinx.ext.autodoc",
-    "sphinx.ext.autosummary",
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",
     "sphinx.ext.intersphinx",
@@ -30,7 +29,7 @@ autodoc_default_options = {
     "exclude-members": "__weakref__",
 }
 
-autosummary_generate = True
+autosummary_generate = False
 autodoc_typehints = "description"
 
 # Napoleon settings

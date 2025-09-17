@@ -20,7 +20,7 @@ Chain of Thought
    :show-inheritance:
 
 Deductive Reasoning
-------------------
+-------------------
 
 .. automodule:: reasoning_library.deductive
    :members:
@@ -28,7 +28,7 @@ Deductive Reasoning
    :show-inheritance:
 
 Inductive Reasoning
-------------------
+-------------------
 
 .. automodule:: reasoning_library.inductive
    :members:

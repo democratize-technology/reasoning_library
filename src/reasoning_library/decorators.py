@@ -52,10 +52,11 @@ def tool_spec(
     The spec is derived from the function's signature and docstring.
 
     This decorator supports a hybrid model for metadata:
-    1.  **Explicit Declaration (Preferred):** Pass metadata directly as arguments
-        (e.g., `mathematical_basis`, `confidence_factors`).
-    2.  **Heuristic Fallback:** If no explicit arguments are provided, it falls back
-        to `_detect_mathematical_reasoning` to infer metadata for backward compatibility.
+
+    1. **Explicit Declaration (Preferred):** Pass metadata directly as arguments
+       (e.g., `mathematical_basis`, `confidence_factors`).
+    2. **Heuristic Fallback:** If no explicit arguments are provided, it falls back
+       to `_detect_mathematical_reasoning` to infer metadata for backward compatibility.
     """
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
