@@ -41,7 +41,7 @@ class TestConversationIdValidation:
             "a",
             "A1b2C3d4",
             "test_conv_2024",
-            "session-uuid-1234567890123456789012345678901234567890123456789012"[:64],
+            "session-uuid-12345678901234567890"[:32],
         ]
 
         for conv_id in valid_ids:
@@ -61,7 +61,7 @@ class TestConversationIdValidation:
             "conv\\backslash",  # Backslash
             "conv;semicolon",  # Semicolon
             "conv<script>",  # HTML tags
-            "a" * 65,  # Too long (over 64 chars)
+            "a" * 33,  # Too long (over 32 chars)
             123,  # Not a string
             None,  # None
             "conv\n",  # Newline

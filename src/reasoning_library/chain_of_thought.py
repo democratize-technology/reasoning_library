@@ -33,9 +33,9 @@ def _validate_conversation_id(conversation_id: str) -> str:
     """
     if not isinstance(conversation_id, str):
         raise ValueError("conversation_id must be a string")
-    if not re.match(r"\A[a-zA-Z0-9_-]{1,64}\Z", conversation_id):
+    if not re.match(r"\A[a-zA-Z0-9_-]{1,32}\Z", conversation_id):
         raise ValueError(
-            "Invalid conversation_id format. Must be 1-64 alphanumeric characters, underscores, or hyphens."
+            "Invalid conversation_id format. Must be 1-32 alphanumeric characters, underscores, or hyphens."
         )
     return conversation_id
 

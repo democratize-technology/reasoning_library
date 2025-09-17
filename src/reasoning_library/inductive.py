@@ -8,7 +8,10 @@ pattern recognition in numerical sequences.
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
-import numpy.typing as npt
+
+# Use a simple, compatible type for NumPy arrays across all versions
+# This avoids the complex typing issues in NumPy 2.x
+NDArrayFloat = np.ndarray
 
 from .core import ReasoningChain, ReasoningStep, curry, tool_spec
 
@@ -35,7 +38,7 @@ def _assess_data_sufficiency(sequence_length: int, pattern_type: str) -> float:
 
 
 def _calculate_pattern_quality_score(
-    values: Union[npt.NDArray[np.floating[Any]], List[float]], pattern_type: str
+    values: Union[np.ndarray[Any, np.dtype[Any]], List[float]], pattern_type: str
 ) -> float:
     """
     Calculate pattern quality based on statistical variance metrics.
@@ -75,7 +78,7 @@ def _calculate_pattern_quality_score(
 
 
 def _calculate_arithmetic_confidence(
-    differences: npt.NDArray[np.floating[Any]],
+    differences: np.ndarray[Any, np.dtype[Any]],
     sequence_length: int,
     base_confidence: float = 0.95,
 ) -> float:

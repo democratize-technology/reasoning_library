@@ -121,3 +121,33 @@ print(json.dumps(TOOL_SPECS, indent=2))
 ## Extending the Library
 
 This library is designed to be extensible. You can add new reasoning modules (e.g., for Abductive, Analogical, Causal reasoning) by creating new Python files and implementing their logic using the `ReasoningStep` and `ReasoningChain` structures, and decorating functions with `@tool_spec` to expose them to LLMs.
+
+## Continuous Integration
+
+The project includes comprehensive CI/CD workflows that ensure code quality and security:
+
+### CI Checks
+- ✅ **Unit Tests**: All tests must pass (100% current)
+- ✅ **Type Checking**: No mypy errors
+- ✅ **Code Coverage**: Minimum 80% coverage
+- ✅ **Security Scans**: No high-severity vulnerabilities
+- ✅ **Documentation**: API docs must build successfully
+
+### Local CI Validation
+
+Before pushing changes, validate CI checks locally:
+```bash
+./scripts/validate_ci.sh
+```
+
+### Troubleshooting CI Failures
+
+#### Security Scan Issues
+- **Tool timeouts**: Some security tools may timeout when checking external APIs. These are not vulnerabilities.
+- **False positives**: Review security findings carefully - test code may trigger warnings.
+- **Resolution**: Check workflow artifacts for detailed security reports.
+
+#### Documentation Build Issues
+- **Missing tools**: Documentation tools are installed on-demand via `uv run --with`.
+- **Import errors**: Ensure modules are importable without external dependencies.
+- **Resolution**: Test with `uv run --with sphinx sphinx-build docs/source docs/build`

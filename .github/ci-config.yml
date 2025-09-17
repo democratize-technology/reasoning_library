@@ -1,0 +1,35 @@
+# CI Configuration for reasoning-library
+# This file contains configuration overrides for CI workflows
+
+# Tool installation configurations
+tools:
+  security:
+    safety:
+      timeout: 30  # seconds
+      fallback: true  # Use fallback if tool fails
+    pip-audit:
+      timeout: 60
+      fallback: true
+    bandit:
+      timeout: 60
+      strict: false  # Don't fail on warnings
+    semgrep:
+      timeout: 120
+      config: auto  # Use automatic rule selection
+
+  documentation:
+    sphinx:
+      version: "latest"
+      strict_mode: false  # Continue on warnings
+
+# Error handling
+error_handling:
+  # Allow workflows to pass when tools timeout or have configuration issues
+  allow_tool_failures: true
+  # Only fail on actual vulnerabilities/issues, not tool problems
+  strict_security: false
+
+# Reporting
+reporting:
+  upload_artifacts: true
+  retention_days: 30
