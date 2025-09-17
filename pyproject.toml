@@ -26,7 +26,7 @@ classifiers = [
 keywords = ["reasoning", "logic", "ai", "llm", "functional-programming"]
 requires-python = ">=3.10"
 dependencies = [
-    "numpy>=1.24.0",
+    "numpy>=2.2.0,<2.3.0",
     "pytest>=8.4.2",
 ]
 
@@ -125,6 +125,12 @@ strict_equality = true
 [[tool.mypy.overrides]]
 module = ["numpy.*"]
 ignore_missing_imports = true
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["numpy.typing"]
+ignore_missing_imports = true
+ignore_errors = true
 
 [dependency-groups]
 dev = [
