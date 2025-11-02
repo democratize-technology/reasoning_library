@@ -75,6 +75,91 @@ def _extract_keywords(text: str) -> List[str]:
     return list(set(keywords))
 
 
+def _extract_keywords_with_context(observations: List[str], context: Optional[str] = None) -> Dict[str, List[str]]:
+    """
+    Extract meaningful phrases with context, not just individual words.
+
+    Args:
+        observations (List[str]): List of observations to analyze
+        context (Optional[str]): Additional context information
+
+    Returns:
+        Dict[str, List[str]]: Dictionary with actions, components, and issues
+    """
+    # Combine all text
+    text = " ".join(observations).lower()
+    if context:
+        text += " " + context.lower()
+
+    words = text.split()
+
+    # Action detection with context
+    actions = []
+    for i, word in enumerate(words):
+        if word in ["deploy", "deployment", "update", "restart", "change"]:
+            # Look for modifiers like "recent" or "code"
+            modifier = ""
+            if i > 0 and words[i-1] in ["recent", "code", "new"]:
+                modifier = words[i-1] + " "
+            actions.append(f"{modifier}{word}")
+
+    # Component detection
+    components = []
+    for word in words:
+        if word in ["server", "database", "cache", "api", "network", "application"]:
+            components.append(word)
+
+    # Issue detection with context
+    issues = []
+    for i, word in enumerate(words):
+        if word in ["cpu", "memory", "disk", "network"]:
+            # Look for percentage or "at X%"
+            if i + 1 < len(words) and "%" in words[i+1]:
+                issues.append(f"high {word.upper()} usage")
+            elif i > 0 and words[i-1] in ["high", "low"]:
+                issues.append(f"{words[i-1]} {word.upper()}")
+            else:
+                issues.append(f"high {word.upper()} usage")
+        elif word in ["slow", "slowly"]:
+            if i > 0 and words[i-1] == "responding":
+                issues.append("slow response times")
+            else:
+                issues.append("performance issues")
+        elif word in ["error", "errors", "crash", "failure"]:
+            issues.append(f"{word}s")
+
+    return {
+        "actions": actions if actions else ["recent change"],
+        "components": components if components else ["system"],
+        "issues": issues if issues else ["performance issue"],
+    }
+
+
+# Domain-specific templates for hypothesis generation
+# Each domain contains:
+# - keywords: List of keywords that trigger this domain
+# - templates: List of template strings with {action}, {component}, and {issue} placeholders
+DOMAIN_TEMPLATES = {
+    "debugging": {
+        "keywords": ["deploy", "code", "server", "database", "cpu", "memory", "slow", "error"],
+        "templates": [
+            "{action} introduced {issue} in {component}",
+            "{component} experiencing {issue} due to {action}",
+            "Performance regression in {component} from {action}",
+            "{component} resource exhaustion caused by {issue}",
+        ]
+    },
+    "system": {
+        "keywords": ["connection", "network", "timeout", "latency", "load"],
+        "templates": [
+            "Network or connection issue affecting {component}",
+            "Load balancing problem causing {issue} in {component}",
+            "{component} contention due to {action}"
+        ]
+    }
+}
+
+
 def _find_common_themes(observations: List[str]) -> List[str]:
     """
     Find common themes and patterns across observations.
@@ -207,29 +292,92 @@ def generate_hypotheses(
         )
         hypotheses.append(causal_chain)
 
-    # 4. Contextual hypothesis (if context provided)
+    # 4. Domain-specific template hypotheses (if context provided)
     if context:
-        context_keywords = _extract_keywords(context)
-        if context_keywords:
-            context_hypothesis = {
-                "hypothesis": f"The observations are related to the context: {', '.join(context_keywords[:3])}",
-                "explains": list(range(len(observations))),
-                "confidence": 0.0,  # Will be calculated
-                "assumptions": [
-                    f"Context is relevant to observations",
-                    f"{context_keywords[0]} is a key factor"
-                ],
-                "testable_predictions": [
-                    "Changing the context should change the observations",
-                    "Similar contexts should produce similar observations"
-                ],
-                "type": "contextual",
-                "context_keywords": context_keywords[:3]
-            }
-            context_hypothesis["confidence"] = _calculate_hypothesis_confidence(
-                context_hypothesis, len(observations), len(observations), 2
-            )
-            hypotheses.append(context_hypothesis)
+        # Determine domain based on keywords
+        domain = None
+        all_text = " ".join(observations) + " " + context.lower()
+
+        for domain_name, domain_info in DOMAIN_TEMPLATES.items():
+            if any(keyword in all_text for keyword in domain_info["keywords"]):
+                domain = domain_name
+                break
+
+        if domain:
+            keywords = _extract_keywords_with_context(observations, context)
+            template_hyps = []
+
+            for idx, template in enumerate(DOMAIN_TEMPLATES[domain]["templates"][:max_hypotheses]):
+                # Select best keywords for this template
+                action = keywords["actions"][0] if keywords["actions"] else "recent change"
+                component = keywords["components"][min(idx, len(keywords["components"])-1)] if keywords["components"] else "system"
+                issue = keywords["issues"][min(idx, len(keywords["issues"])-1)] if keywords["issues"] else "performance issue"
+
+                # Validate inputs before template formatting
+                if not isinstance(action, str) or len(action.strip()) == 0:
+                    action = "recent change"
+                if not isinstance(component, str) or len(component.strip()) == 0:
+                    component = "system"
+                if not isinstance(issue, str) or len(issue.strip()) == 0:
+                    issue = "performance issue"
+
+                # Length limits to prevent excessive output
+                action = action[:50].strip()
+                component = component[:50].strip()
+                issue = issue[:100].strip()
+
+                # Fill template with validated inputs
+                hypothesis_text = template.format(
+                    action=action,
+                    component=component,
+                    issue=issue
+                )
+
+                # Capitalize first letter
+                hypothesis_text = hypothesis_text[0].upper() + hypothesis_text[1:]
+
+                template_hyps.append({
+                    "hypothesis": hypothesis_text,
+                    "explains": list(range(len(observations))),
+                    "confidence": 0.6,
+                    "assumptions": [f"Context '{context}' is relevant to the issue"],
+                    "testable_predictions": [
+                        f"Reverting the {action} should reduce or resolve the {issue}",
+                        f"Monitoring {component} metrics should show correlation with the issue"
+                    ],
+                    "type": "domain_template"
+                })
+
+            # Calculate confidence for template hypotheses
+            for hyp in template_hyps:
+                hyp["confidence"] = _calculate_hypothesis_confidence(
+                    hyp, len(observations), len(observations), 1
+                )
+
+            hypotheses.extend(template_hyps)
+        else:
+            # Fallback to original context hypothesis if no domain matches
+            context_keywords = _extract_keywords(context)
+            if context_keywords:
+                context_hypothesis = {
+                    "hypothesis": f"The observations are related to the context: {', '.join(context_keywords[:3])}",
+                    "explains": list(range(len(observations))),
+                    "confidence": 0.0,  # Will be calculated
+                    "assumptions": [
+                        f"Context is relevant to observations",
+                        f"{context_keywords[0]} is a key factor"
+                    ],
+                    "testable_predictions": [
+                        "Changing the context should change the observations",
+                        "Similar contexts should produce similar observations"
+                    ],
+                    "type": "contextual",
+                    "context_keywords": context_keywords[:3]
+                }
+                context_hypothesis["confidence"] = _calculate_hypothesis_confidence(
+                    context_hypothesis, len(observations), len(observations), 2
+                )
+                hypotheses.append(context_hypothesis)
 
     # 5. Systemic hypothesis (underlying system issue)
     systemic = {
