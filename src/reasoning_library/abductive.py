@@ -1,0 +1,425 @@
+"""
+Abductive Reasoning Module.
+
+This module provides functions for abductive reasoning (inference to the best explanation),
+including hypothesis generation and evaluation from observations.
+"""
+
+from typing import Any, Dict, List, Optional, Set, Tuple
+import re
+from collections import defaultdict
+
+from .core import ReasoningChain, ReasoningStep, curry, tool_spec
+
+
+def _calculate_hypothesis_confidence(
+    hypothesis: Dict[str, Any],
+    total_observations: int,
+    explained_observations: int,
+    assumption_count: int,
+    base_confidence: float = 0.7,
+) -> float:
+    """
+    Calculate confidence score for a hypothesis.
+
+    Args:
+        hypothesis (Dict): The hypothesis to evaluate
+        total_observations (int): Total number of observations to explain
+        explained_observations (int): Number of observations explained by this hypothesis
+        assumption_count (int): Number of assumptions required
+        base_confidence (float): Base confidence level
+
+    Returns:
+        float: Confidence score (0.0-1.0)
+    """
+    # Coverage factor: how many observations are explained
+    coverage_factor = explained_observations / total_observations if total_observations > 0 else 0.0
+
+    # Simplicity factor: prefer hypotheses with fewer assumptions (Occam's razor)
+    simplicity_factor = 1.0 / (1.0 + 0.2 * assumption_count)
+
+    # Specificity factor: more specific hypotheses get higher confidence
+    specificity_factor = min(1.0, len(hypothesis.get("testable_predictions", [])) / 3.0)
+
+    # Calculate final confidence
+    confidence = base_confidence * coverage_factor * simplicity_factor * specificity_factor
+
+    return min(1.0, max(0.0, confidence))
+
+
+def _extract_keywords(text: str) -> List[str]:
+    """
+    Extract relevant keywords from text for hypothesis generation.
+
+    Args:
+        text (str): Text to analyze
+
+    Returns:
+        List[str]: List of relevant keywords
+    """
+    # Simple keyword extraction - remove common words and extract meaningful terms
+    common_words = {
+        'the', 'is', 'at', 'which', 'on', 'a', 'an', 'and', 'or', 'but', 'in', 'with',
+        'to', 'for', 'of', 'as', 'by', 'that', 'this', 'it', 'from', 'are', 'be', 'was',
+        'were', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
+        'could', 'should', 'may', 'might', 'can', 'must', 'shall', 'very', 'really'
+    }
+
+    # Convert to lowercase and split
+    words = re.findall(r'\b\w+\b', text.lower())
+
+    # Filter out common words and short words
+    keywords = [word for word in words if word not in common_words and len(word) > 2]
+
+    # Return unique keywords
+    return list(set(keywords))
+
+
+def _find_common_themes(observations: List[str]) -> List[str]:
+    """
+    Find common themes and patterns across observations.
+
+    Args:
+        observations (List[str]): List of observations
+
+    Returns:
+        List[str]: Common themes found
+    """
+    all_keywords = []
+    for obs in observations:
+        all_keywords.extend(_extract_keywords(obs))
+
+    # Count keyword frequency
+    keyword_freq = defaultdict(int)
+    for keyword in all_keywords:
+        keyword_freq[keyword] += 1
+
+    # Return keywords that appear in multiple observations
+    common_themes = [kw for kw, freq in keyword_freq.items() if freq >= 2]
+
+    # Sort by frequency
+    common_themes.sort(key=lambda x: keyword_freq[x], reverse=True)
+
+    return common_themes[:10]  # Return top 10 themes
+
+
+@tool_spec(
+    mathematical_basis="Abductive reasoning - inference to the best explanation",
+    confidence_factors=["coverage", "simplicity", "specificity"],
+    confidence_formula="base * coverage_factor * simplicity_factor * specificity_factor"
+)
+@curry
+def generate_hypotheses(
+    observations: List[str],
+    reasoning_chain: Optional[ReasoningChain],
+    *,
+    context: Optional[str] = None,
+    max_hypotheses: int = 5,
+) -> List[Dict[str, Any]]:
+    """
+    Generate plausible explanatory hypotheses from observations using abductive reasoning.
+
+    Args:
+        observations (List[str]): List of observations to explain
+        reasoning_chain (Optional[ReasoningChain]): An optional ReasoningChain to add steps to
+        context (Optional[str]): Additional context for hypothesis generation
+        max_hypotheses (int): Maximum number of hypotheses to generate
+
+    Returns:
+        List[Dict]: List of generated hypotheses with confidence scores and metadata
+    """
+    if not observations:
+        if reasoning_chain:
+            reasoning_chain.add_step(
+                stage="Abductive Reasoning: Hypothesis Generation",
+                description="No observations provided for hypothesis generation",
+                result=[],
+                confidence=0.0
+            )
+        return []
+
+    stage = "Abductive Reasoning: Hypothesis Generation"
+    description = f"Generating hypotheses to explain {len(observations)} observations"
+
+    # Find common themes in observations
+    common_themes = _find_common_themes(observations)
+
+    # Generate different types of hypotheses
+    hypotheses = []
+
+    # 1. Single-cause hypothesis (one explanation for all observations)
+    if common_themes:
+        primary_theme = common_themes[0]
+        single_cause = {
+            "hypothesis": f"The observations are caused by {primary_theme}",
+            "explains": list(range(len(observations))),
+            "confidence": 0.0,  # Will be calculated
+            "assumptions": [f"{primary_theme} is the primary cause"],
+            "testable_predictions": [
+                f"Removing {primary_theme} should stop the observations",
+                f"Changing {primary_theme} should change the observations"
+            ],
+            "type": "single_cause",
+            "theme": primary_theme
+        }
+        single_cause["confidence"] = _calculate_hypothesis_confidence(
+            single_cause, len(observations), len(observations), 1
+        )
+        hypotheses.append(single_cause)
+
+    # 2. Multiple-cause hypothesis (different causes for different observations)
+    if len(common_themes) >= 2:
+        multiple_causes = {
+            "hypothesis": f"Multiple factors are contributing: {', '.join(common_themes[:3])}",
+            "explains": list(range(len(observations))),
+            "confidence": 0.0,  # Will be calculated
+            "assumptions": [f"{theme} is a contributing factor" for theme in common_themes[:3]],
+            "testable_predictions": [
+                f"Addressing each factor should reduce corresponding observations",
+                f"Combined intervention should have greater effect than individual"
+            ],
+            "type": "multiple_causes",
+            "themes": common_themes[:3]
+        }
+        multiple_causes["confidence"] = _calculate_hypothesis_confidence(
+            multiple_causes, len(observations), len(observations), len(common_themes[:3])
+        )
+        hypotheses.append(multiple_causes)
+
+    # 3. Temporal/causal chain hypothesis
+    if len(observations) >= 2:
+        causal_chain = {
+            "hypothesis": "The observations represent a causal chain or progression",
+            "explains": list(range(len(observations))),
+            "confidence": 0.0,  # Will be calculated
+            "assumptions": [
+                "Observations occur in a temporal sequence",
+                "Earlier observations influence later ones"
+            ],
+            "testable_predictions": [
+                "Intervening early should prevent later observations",
+                "Reversing the order should change outcomes"
+            ],
+            "type": "causal_chain"
+        }
+        causal_chain["confidence"] = _calculate_hypothesis_confidence(
+            causal_chain, len(observations), len(observations), 2
+        )
+        hypotheses.append(causal_chain)
+
+    # 4. Contextual hypothesis (if context provided)
+    if context:
+        context_keywords = _extract_keywords(context)
+        if context_keywords:
+            context_hypothesis = {
+                "hypothesis": f"The observations are related to the context: {', '.join(context_keywords[:3])}",
+                "explains": list(range(len(observations))),
+                "confidence": 0.0,  # Will be calculated
+                "assumptions": [
+                    f"Context is relevant to observations",
+                    f"{context_keywords[0]} is a key factor"
+                ],
+                "testable_predictions": [
+                    "Changing the context should change the observations",
+                    "Similar contexts should produce similar observations"
+                ],
+                "type": "contextual",
+                "context_keywords": context_keywords[:3]
+            }
+            context_hypothesis["confidence"] = _calculate_hypothesis_confidence(
+                context_hypothesis, len(observations), len(observations), 2
+            )
+            hypotheses.append(context_hypothesis)
+
+    # 5. Systemic hypothesis (underlying system issue)
+    systemic = {
+        "hypothesis": "The observations indicate a systemic issue affecting multiple components",
+        "explains": list(range(len(observations))),
+        "confidence": 0.0,  # Will be calculated
+        "assumptions": [
+            "Multiple observations share a common root cause",
+            "System-wide factors are at play"
+        ],
+        "testable_predictions": [
+            "Addressing the root cause should resolve all observations",
+            "Similar issues may appear in other related areas"
+        ],
+        "type": "systemic"
+    }
+    systemic["confidence"] = _calculate_hypothesis_confidence(
+        systemic, len(observations), len(observations), 2
+    )
+    hypotheses.append(systemic)
+
+    # Sort hypotheses by confidence
+    hypotheses.sort(key=lambda x: x["confidence"], reverse=True)
+
+    # Limit to max_hypotheses
+    hypotheses = hypotheses[:max_hypotheses]
+
+    if reasoning_chain:
+        reasoning_chain.add_step(
+            stage=stage,
+            description=description,
+            result=hypotheses,
+            confidence=max([h["confidence"] for h in hypotheses]) if hypotheses else 0.0,
+            evidence=f"Generated {len(hypotheses)} hypotheses from {len(observations)} observations",
+            assumptions=["Observations are accurate and relevant", "Generated hypotheses are plausible"]
+        )
+
+    return hypotheses
+
+
+@tool_spec(
+    mathematical_basis="Abductive reasoning - inference to the best explanation",
+    confidence_factors=["coverage", "simplicity", "specificity"],
+    confidence_formula="base * coverage_factor * simplicity_factor * specificity_factor"
+)
+@curry
+def rank_hypotheses(
+    hypotheses: List[Dict[str, Any]],
+    new_evidence: List[str],
+    reasoning_chain: Optional[ReasoningChain],
+) -> List[Dict[str, Any]]:
+    """
+    Rank and update hypotheses based on new evidence.
+
+    Args:
+        hypotheses (List[Dict]): List of existing hypotheses
+        new_evidence (List[str]): New evidence to consider
+        reasoning_chain (Optional[ReasoningChain]): An optional ReasoningChain to add steps to
+
+    Returns:
+        List[Dict]: Updated hypotheses with adjusted confidence scores
+    """
+    if not hypotheses:
+        if reasoning_chain:
+            reasoning_chain.add_step(
+                stage="Abductive Reasoning: Hypothesis Ranking",
+                description="No hypotheses provided for ranking",
+                result=[],
+                confidence=0.0
+            )
+        return []
+
+    stage = "Abductive Reasoning: Hypothesis Ranking"
+    description = f"Updating {len(hypotheses)} hypotheses based on {len(new_evidence)} pieces of new evidence"
+
+    updated_hypotheses = []
+
+    for hypothesis in hypotheses:
+        # Create a copy to avoid modifying original
+        updated_hypothesis = hypothesis.copy()
+
+        # Calculate evidence support score
+        evidence_support = 0.0
+        total_evidence_score = 0.0
+
+        for evidence in new_evidence:
+            # Simple evidence matching based on keyword overlap
+            evidence_keywords = set(_extract_keywords(evidence))
+            hypothesis_keywords = set(_extract_keywords(hypothesis["hypothesis"]))
+
+            # Calculate overlap
+            overlap = len(evidence_keywords & hypothesis_keywords)
+            total = len(evidence_keywords | hypothesis_keywords)
+
+            if total > 0:
+                similarity = overlap / total
+                evidence_support += similarity
+                total_evidence_score += 1.0
+
+        # Average evidence support
+        avg_evidence_support = evidence_support / total_evidence_score if total_evidence_score > 0 else 0.0
+
+        # Update confidence based on evidence
+        confidence_multiplier = 1.0 + (0.5 * avg_evidence_support)  # Boost confidence based on evidence
+        updated_hypothesis["confidence"] = min(1.0, hypothesis["confidence"] * confidence_multiplier)
+
+        # Add evidence to hypothesis
+        if "supporting_evidence" not in updated_hypothesis:
+            updated_hypothesis["supporting_evidence"] = []
+        updated_hypothesis["supporting_evidence"].extend(new_evidence)
+
+        # Update hypothesis description if strong evidence
+        if avg_evidence_support > 0.7:
+            updated_hypothesis["hypothesis"] += " (strongly supported by new evidence)"
+        elif avg_evidence_support > 0.3:
+            updated_hypothesis["hypothesis"] += " (supported by new evidence)"
+
+        updated_hypotheses.append(updated_hypothesis)
+
+    # Re-sort by updated confidence
+    updated_hypotheses.sort(key=lambda x: x["confidence"], reverse=True)
+
+    if reasoning_chain:
+        reasoning_chain.add_step(
+            stage=stage,
+            description=description,
+            result=updated_hypotheses,
+            confidence=max([h["confidence"] for h in updated_hypotheses]) if updated_hypotheses else 0.0,
+            evidence=f"Hypotheses re-ranked based on {len(new_evidence)} pieces of new evidence",
+            assumptions=["New evidence is accurate and relevant", "Evidence evaluation is objective"]
+        )
+
+    return updated_hypotheses
+
+
+@tool_spec(
+    mathematical_basis="Abductive reasoning - inference to the best explanation",
+    confidence_factors=["coverage", "simplicity", "specificity"],
+    confidence_formula="base * coverage_factor * simplicity_factor * specificity_factor"
+)
+@curry
+def evaluate_best_explanation(
+    hypotheses: List[Dict[str, Any]],
+    reasoning_chain: Optional[ReasoningChain],
+) -> Optional[Dict[str, Any]]:
+    """
+    Select the best explanation from a set of hypotheses.
+
+    Args:
+        hypotheses (List[Dict]): List of hypotheses to evaluate
+        reasoning_chain (Optional[ReasoningChain]): An optional ReasoningChain to add steps to
+
+    Returns:
+        Optional[Dict]: The best explanation or None if no hypotheses provided
+    """
+    if not hypotheses:
+        if reasoning_chain:
+            reasoning_chain.add_step(
+                stage="Abductive Reasoning: Best Explanation Selection",
+                description="No hypotheses provided for evaluation",
+                result=None,
+                confidence=0.0
+            )
+        return None
+
+    stage = "Abductive Reasoning: Best Explanation Selection"
+    description = f"Evaluating {len(hypotheses)} hypotheses to select best explanation"
+
+    # Select the hypothesis with highest confidence
+    best_hypothesis = max(hypotheses, key=lambda x: x["confidence"])
+
+    # Add evaluation metadata
+    best_hypothesis["evaluation"] = {
+        "total_hypotheses": len(hypotheses),
+        "rank": 1,
+        "selected_as_best": True,
+        "selection_reason": f"Highest confidence score ({best_hypothesis['confidence']:.3f})"
+    }
+
+    if reasoning_chain:
+        reasoning_chain.add_step(
+            stage=stage,
+            description=description,
+            result=best_hypothesis,
+            confidence=best_hypothesis["confidence"],
+            evidence=f"Selected from {len(hypotheses)} hypotheses based on confidence score",
+            assumptions=[
+                "Higher confidence indicates better explanation",
+                "All relevant hypotheses were considered"
+            ]
+        )
+
+    return best_hypothesis

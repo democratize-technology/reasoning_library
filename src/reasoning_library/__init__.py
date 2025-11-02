@@ -18,6 +18,7 @@ from .core import get_tool_specs  # Legacy format for backward compatibility
 from .core import ReasoningChain, ReasoningStep
 from .deductive import apply_modus_ponens
 from .inductive import find_pattern_description, predict_next_in_sequence
+from .abductive import generate_hypotheses, rank_hypotheses, evaluate_best_explanation
 
 
 # Pre-populated lists for easy integration

@@ -39,7 +39,7 @@ def _assess_data_sufficiency(sequence_length: int, pattern_type: str) -> float:
 
 
 def _calculate_pattern_quality_score(
-    values: Union[npt.NDArray[np.floating[Any]], List[float]], pattern_type: str
+    values: Union[np.ndarray, List[float]], pattern_type: str
 ) -> float:
     """
     Calculate pattern quality based on statistical variance metrics.
@@ -213,7 +213,7 @@ def _calculate_pattern_quality_score_original(
 
 
 def _calculate_arithmetic_confidence(
-    differences: npt.NDArray[np.floating[Any]],
+    differences: np.ndarray,
     sequence_length: int,
     base_confidence: float = 0.95,
 ) -> float:
@@ -484,3 +484,505 @@ def find_pattern_description(
             confidence=confidence,
         )
     return result_str
+
+
+# Enhanced Pattern Recognition Functions
+
+def _calculate_recursive_confidence(
+    sequence_length: int,
+    match_score: float,
+    base_confidence: float = 0.9,
+) -> float:
+    """
+    Calculate confidence for recursive pattern detection.
+
+    Args:
+        sequence_length (int): Length of the original sequence
+        match_score (float): How well the pattern matches (0.0-1.0)
+        base_confidence (float): Base confidence level before adjustments
+
+    Returns:
+        float: Adjusted confidence score (0.0-1.0)
+    """
+    # Data sufficiency factor - recursive patterns need more data
+    minimum_required = 5  # Need at least 5 terms for reliable recursive detection
+    data_sufficiency_factor = min(1.0, sequence_length / minimum_required)
+
+    # Pattern quality factor - how perfect the match is
+    pattern_quality_factor = match_score
+
+    # Complexity factor - recursive is more complex than arithmetic
+    complexity_factor = 1.0 / (1.0 + 0.3)  # complexity_score = 0.3 for recursive
+
+    # Calculate final confidence
+    confidence = (
+        base_confidence
+        * data_sufficiency_factor
+        * pattern_quality_factor
+        * complexity_factor
+    )
+
+    return min(1.0, max(0.0, confidence))
+
+
+def _calculate_polynomial_confidence(
+    sequence_length: int,
+    r_squared: float,
+    degree: int,
+    base_confidence: float = 0.85,
+) -> float:
+    """
+    Calculate confidence for polynomial pattern detection.
+
+    Args:
+        sequence_length (int): Length of the original sequence
+        r_squared (float): R-squared value from polynomial fit
+        degree (int): Degree of the polynomial
+        base_confidence (float): Base confidence level before adjustments
+
+    Returns:
+        float: Adjusted confidence score (0.0-1.0)
+    """
+    # Data sufficiency factor
+    minimum_required = degree + 3  # Need at least degree + 3 points for reliable fit
+    data_sufficiency_factor = min(1.0, sequence_length / minimum_required)
+
+    # Pattern quality factor - based on R-squared
+    pattern_quality_factor = r_squared
+
+    # Complexity factor - higher degree polynomials are more complex
+    complexity_factor = 1.0 / (1.0 + 0.1 * degree)
+
+    # Calculate final confidence
+    confidence = (
+        base_confidence
+        * data_sufficiency_factor
+        * pattern_quality_factor
+        * complexity_factor
+    )
+
+    return min(1.0, max(0.0, confidence))
+
+
+def detect_fibonacci_pattern(sequence: List[float], tolerance: float = 1e-10) -> Optional[Dict[str, Any]]:
+    """
+    Detect Fibonacci-like recursive patterns in a sequence.
+
+    Args:
+        sequence (List[float]): The sequence to analyze
+        tolerance (float): Tolerance for floating point comparisons
+
+    Returns:
+        Optional[Dict]: Pattern information if detected, None otherwise
+    """
+    if len(sequence) < 5:  # Need at least 5 terms for reliable Fibonacci detection
+        return None
+
+    # Check if sequence follows Fibonacci rule: F[n] = F[n-1] + F[n-2]
+    actual_sequence = np.array(sequence)
+    calculated_sequence = np.zeros_like(actual_sequence)
+
+    # Use first two terms as seed
+    calculated_sequence[0] = actual_sequence[0]
+    calculated_sequence[1] = actual_sequence[1]
+
+    # Generate the rest using Fibonacci rule
+    for i in range(2, len(actual_sequence)):
+        calculated_sequence[i] = calculated_sequence[i-1] + calculated_sequence[i-2]
+
+    # Check how well the calculated sequence matches the actual one
+    if np.allclose(actual_sequence, calculated_sequence, atol=tolerance):
+        # Calculate confidence based on how perfect the match is
+        match_score = 1.0 - np.mean(np.abs(actual_sequence - calculated_sequence)) / (np.mean(np.abs(actual_sequence)) + 1e-10)
+        match_score = max(0.0, min(1.0, match_score))
+
+        # Predict next term
+        next_term = calculated_sequence[-1] + calculated_sequence[-2]
+
+        return {
+            "type": "fibonacci",
+            "rule": "F[n] = F[n-1] + F[n-2]",
+            "next_term": float(next_term),
+            "confidence": _calculate_recursive_confidence(len(sequence), match_score),
+            "seed_values": [float(actual_sequence[0]), float(actual_sequence[1])]
+        }
+
+    return None
+
+
+def detect_lucas_pattern(sequence: List[float], tolerance: float = 1e-10) -> Optional[Dict[str, Any]]:
+    """
+    Detect Lucas sequence pattern (Fibonacci variant with different seeds).
+
+    Args:
+        sequence (List[float]): The sequence to analyze
+        tolerance (float): Tolerance for floating point comparisons
+
+    Returns:
+        Optional[Dict]: Pattern information if detected, None otherwise
+    """
+    if len(sequence) < 5:  # Need at least 5 terms for reliable Lucas detection
+        return None
+
+    # Lucas sequence follows same rule as Fibonacci but starts with 2, 1
+    actual_sequence = np.array(sequence)
+    calculated_sequence = np.zeros_like(actual_sequence)
+
+    # Lucas starts with 2, 1 by definition, but we'll check if it follows the rule
+    calculated_sequence[0] = actual_sequence[0]
+    calculated_sequence[1] = actual_sequence[1]
+
+    # Generate the rest using Lucas rule (same as Fibonacci)
+    for i in range(2, len(actual_sequence)):
+        calculated_sequence[i] = calculated_sequence[i-1] + calculated_sequence[i-2]
+
+    # Check if it's a Lucas sequence (should start with 2, 1) or Lucas-like
+    is_classic_lucas = np.allclose(actual_sequence[:2], [2, 1], atol=tolerance)
+
+    if np.allclose(actual_sequence, calculated_sequence, atol=tolerance):
+        # Calculate confidence based on how perfect the match is
+        match_score = 1.0 - np.mean(np.abs(actual_sequence - calculated_sequence)) / (np.mean(np.abs(actual_sequence)) + 1e-10)
+        match_score = max(0.0, min(1.0, match_score))
+
+        # Higher confidence for classic Lucas
+        base_confidence = 0.95 if is_classic_lucas else 0.85
+
+        # Predict next term
+        next_term = calculated_sequence[-1] + calculated_sequence[-2]
+
+        return {
+            "type": "lucas" if is_classic_lucas else "lucas_variant",
+            "rule": "L[n] = L[n-1] + L[n-2]",
+            "next_term": float(next_term),
+            "confidence": _calculate_recursive_confidence(len(sequence), match_score, base_confidence),
+            "seed_values": [float(actual_sequence[0]), float(actual_sequence[1])],
+            "is_classic": is_classic_lucas
+        }
+
+    return None
+
+
+def detect_tribonacci_pattern(sequence: List[float], tolerance: float = 1e-10) -> Optional[Dict[str, Any]]:
+    """
+    Detect Tribonacci sequence pattern (sum of previous 3 terms).
+
+    Args:
+        sequence (List[float]): The sequence to analyze
+        tolerance (float): Tolerance for floating point comparisons
+
+    Returns:
+        Optional[Dict]: Pattern information if detected, None otherwise
+    """
+    if len(sequence) < 6:  # Need at least 6 terms for reliable Tribonacci detection
+        return None
+
+    # Check if sequence follows Tribonacci rule: T[n] = T[n-1] + T[n-2] + T[n-3]
+    actual_sequence = np.array(sequence)
+    calculated_sequence = np.zeros_like(actual_sequence)
+
+    # Use first three terms as seed
+    calculated_sequence[0] = actual_sequence[0]
+    calculated_sequence[1] = actual_sequence[1]
+    calculated_sequence[2] = actual_sequence[2]
+
+    # Generate the rest using Tribonacci rule
+    for i in range(3, len(actual_sequence)):
+        calculated_sequence[i] = calculated_sequence[i-1] + calculated_sequence[i-2] + calculated_sequence[i-3]
+
+    # Check how well the calculated sequence matches the actual one
+    if np.allclose(actual_sequence, calculated_sequence, atol=tolerance):
+        # Calculate confidence based on how perfect the match is
+        match_score = 1.0 - np.mean(np.abs(actual_sequence - calculated_sequence)) / (np.mean(np.abs(actual_sequence)) + 1e-10)
+        match_score = max(0.0, min(1.0, match_score))
+
+        # Predict next term
+        next_term = calculated_sequence[-1] + calculated_sequence[-2] + calculated_sequence[-3]
+
+        return {
+            "type": "tribonacci",
+            "rule": "T[n] = T[n-1] + T[n-2] + T[n-3]",
+            "next_term": float(next_term),
+            "confidence": _calculate_recursive_confidence(len(sequence), match_score, 0.8),  # Slightly lower base confidence
+            "seed_values": [float(actual_sequence[0]), float(actual_sequence[1]), float(actual_sequence[2])]
+        }
+
+    return None
+
+
+def detect_polynomial_pattern(sequence: List[float], max_degree: int = 3) -> Optional[Dict[str, Any]]:
+    """
+    Detect polynomial patterns (squares, cubes, etc.) in a sequence.
+
+    Args:
+        sequence (List[float]): The sequence to analyze
+        max_degree (int): Maximum polynomial degree to check
+
+    Returns:
+        Optional[Dict]: Pattern information if detected, None otherwise
+    """
+    if len(sequence) < max_degree + 2:  # Need enough points for polynomial fitting
+        return None
+
+    x_values = np.arange(1, len(sequence) + 1)  # 1-indexed positions
+    y_values = np.array(sequence)
+
+    best_fit = None
+    best_r_squared = 0.0
+
+    # Try different polynomial degrees
+    for degree in range(1, max_degree + 1):
+        if len(sequence) < degree + 2:
+            continue  # Not enough points for this degree
+
+        # Fit polynomial
+        coefficients = np.polyfit(x_values, y_values, degree)
+        predicted_values = np.polyval(coefficients, x_values)
+
+        # Calculate R-squared
+        ss_res = np.sum((y_values - predicted_values) ** 2)
+        ss_tot = np.sum((y_values - np.mean(y_values)) ** 2)
+        r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+
+        # Consider it a good fit if R-squared is high
+        if r_squared > 0.95 and r_squared > best_r_squared:
+            best_r_squared = r_squared
+            next_x = len(sequence) + 1
+            next_term = np.polyval(coefficients, next_x)
+
+            # Determine pattern type
+            if degree == 2 and np.allclose(coefficients, [1, 0, 0], atol=1e-6):
+                pattern_type = "perfect_squares"
+                description = "Perfect squares (n²)"
+            elif degree == 3 and np.allclose(coefficients, [1, 0, 0, 0], atol=1e-6):
+                pattern_type = "perfect_cubes"
+                description = "Perfect cubes (n³)"
+            elif degree == 2:
+                pattern_type = "quadratic"
+                description = f"Quadratic: {coefficients[0]:.3f}n² + {coefficients[1]:.3f}n + {coefficients[2]:.3f}"
+            elif degree == 3:
+                pattern_type = "cubic"
+                description = f"Cubic: {coefficients[0]:.3f}n³ + {coefficients[1]:.3f}n² + {coefficients[2]:.3f}n + {coefficients[3]:.3f}"
+            else:
+                pattern_type = f"polynomial_degree_{degree}"
+                description = f"Polynomial of degree {degree}"
+
+            best_fit = {
+                "type": pattern_type,
+                "description": description,
+                "degree": degree,
+                "coefficients": [float(c) for c in coefficients],
+                "next_term": float(next_term),
+                "confidence": _calculate_polynomial_confidence(len(sequence), r_squared, degree),
+                "r_squared": r_squared
+            }
+
+    return best_fit
+
+
+def detect_exponential_pattern(sequence: List[float], rtol: float = 0.1, atol: float = 1e-8) -> Optional[Dict[str, Any]]:
+    """
+    Detect exponential patterns of the form a * b^n.
+
+    Args:
+        sequence (List[float]): The sequence to analyze
+        rtol (float): Relative tolerance for pattern detection
+        atol (float): Absolute tolerance for pattern detection
+
+    Returns:
+        Optional[Dict]: Pattern information if detected, None otherwise
+    """
+    if len(sequence) < 4:  # Need at least 4 terms for reliable exponential detection
+        return None
+
+    # Check for zeros or negative values that would make exponential patterns problematic
+    if any(s <= 0 for s in sequence):
+        return None
+
+    x_values = np.arange(len(sequence))
+    y_values = np.array(sequence)
+
+    # Take logarithm to linearize exponential pattern
+    log_y = np.log(y_values)
+
+    # Fit linear regression to log-transformed data
+    coeffs = np.polyfit(x_values, log_y, 1)
+    log_a = coeffs[1]  # intercept
+    log_b = coeffs[0]  # slope
+
+    a = np.exp(log_a)
+    b = np.exp(log_b)
+
+    # Generate predicted values
+    predicted_log = np.polyval(coeffs, x_values)
+    predicted_values = np.exp(predicted_log)
+
+    # Check how well the exponential model fits
+    if np.allclose(y_values, predicted_values, rtol=rtol, atol=atol):
+        # Calculate confidence based on fit quality
+        relative_error = np.mean(np.abs((y_values - predicted_values) / y_values))
+        match_score = max(0.0, 1.0 - relative_error / rtol)
+
+        # Predict next term
+        next_x = len(sequence)
+        next_log = log_a + log_b * next_x
+        next_term = np.exp(next_log)
+
+        return {
+            "type": "exponential",
+            "description": f"Exponential: {a:.3f} * {b:.3f}^n",
+            "base": float(b),
+            "coefficient": float(a),
+            "next_term": float(next_term),
+            "confidence": min(0.9, match_score * 0.9),  # Cap at 0.9 for exponential
+            "match_score": match_score
+        }
+
+    return None
+
+
+def detect_custom_step_patterns(sequence: List[float]) -> List[Dict[str, Any]]:
+    """
+    Detect custom step patterns like alternating operations (+2, +3, +2, +3...).
+
+    Args:
+        sequence (List[float]): The sequence to analyze
+
+    Returns:
+        List[Dict]: List of detected patterns with their information
+    """
+    if len(sequence) < 6:  # Need at least 6 terms for pattern detection
+        return []
+
+    detected_patterns = []
+    differences = np.diff(sequence)
+
+    # Check for alternating patterns (2-cycle)
+    if len(differences) >= 4:
+        # Extract odd and even indexed differences
+        odd_diffs = differences[::2]  # indices 0, 2, 4...
+        even_diffs = differences[1::2]  # indices 1, 3, 5...
+
+        if len(odd_diffs) >= 2 and len(even_diffs) >= 2:
+            # Check if odd differences are roughly constant
+            odd_constant = np.allclose(odd_diffs, odd_diffs[0], rtol=0.1, atol=1e-6)
+            even_constant = np.allclose(even_diffs, even_diffs[0], rtol=0.1, atol=1e-6)
+
+            if odd_constant and even_constant:
+                # We have an alternating pattern
+                step1 = odd_diffs[0]
+                step2 = even_diffs[0]
+
+                # Predict next terms
+                # Look at the pattern of differences to determine next step
+                diff_count = len(differences)
+                if diff_count % 2 == 0:  # Even number of differences, next would be step1
+                    next_term = sequence[-1] + step1
+                    pattern_desc = f"Alternating: +{step1}, +{step2} repeating"
+                else:  # Odd number of differences, next would be step2
+                    next_term = sequence[-1] + step2
+                    pattern_desc = f"Alternating: +{step2}, +{step1} repeating"
+
+                detected_patterns.append({
+                    "type": "alternating_steps",
+                    "description": pattern_desc,
+                    "steps": [float(step1), float(step2)],
+                    "next_term": float(next_term),
+                    "confidence": 0.8,  # Good confidence for clear alternating patterns
+                    "period": 2
+                })
+
+    # Check for modulo patterns (sequences that repeat with a period)
+    if len(sequence) >= 6:
+        for period in range(2, min(len(sequence) // 2, 6)):  # Check periods up to 5
+            if len(sequence) % period == 0 or len(sequence) >= period * 2:
+                # Check if the sequence repeats with this period
+                pattern = sequence[:period]
+                repetitions = len(sequence) // period
+                remainder = len(sequence) % period
+
+                # Build expected sequence
+                expected = pattern * repetitions + pattern[:remainder]
+
+                if np.allclose(sequence, expected, rtol=0.05, atol=1e-6):
+                    # Calculate next term
+                    next_pos = len(sequence) % period
+                    next_term = pattern[next_pos]
+
+                    detected_patterns.append({
+                        "type": "periodic",
+                        "description": f"Periodic pattern with period {period}: {pattern}",
+                        "period": period,
+                        "pattern": [float(x) for x in pattern],
+                        "next_term": float(next_term),
+                        "confidence": 0.85
+                    })
+
+    return detected_patterns
+
+
+@tool_spec(
+    mathematical_basis="Recursive sequence analysis (Fibonacci, Lucas, Tribonacci)",
+    confidence_factors=["data_sufficiency", "pattern_quality", "complexity"],
+    confidence_formula="base * data_sufficiency_factor * pattern_quality_factor * complexity_factor",
+)
+@curry
+def detect_recursive_pattern(
+    sequence: List[float],
+    reasoning_chain: Optional[ReasoningChain],
+    *,
+    tolerance: float = 1e-10,
+) -> Optional[Dict[str, Any]]:
+    """
+    Detect recursive patterns in a sequence (Fibonacci, Lucas, Tribonacci).
+
+    Args:
+        sequence (List[float]): The sequence to analyze
+        reasoning_chain (Optional[ReasoningChain]): An optional ReasoningChain to add steps to
+        tolerance (float): Tolerance for floating point comparisons
+
+    Returns:
+        Optional[Dict]: Pattern information if detected, None otherwise
+    """
+    if not isinstance(sequence, (list, tuple, np.ndarray)):
+        raise TypeError(f"Expected list/tuple/array for sequence, got {type(sequence).__name__}")
+
+    if len(sequence) < 5:
+        if reasoning_chain:
+            reasoning_chain.add_step(
+                stage="Inductive Reasoning: Recursive Pattern Detection",
+                description=f"Sequence {sequence} too short for recursive pattern detection",
+                result=None,
+                confidence=0.0
+            )
+        return None
+
+    # Try different recursive patterns in order of preference
+    patterns_to_check = [
+        ("Fibonacci", detect_fibonacci_pattern),
+        ("Lucas", detect_lucas_pattern),
+        ("Tribonacci", detect_tribonacci_pattern)
+    ]
+
+    for pattern_name, detector in patterns_to_check:
+        result = detector(sequence, tolerance)
+        if result:
+            if reasoning_chain:
+                reasoning_chain.add_step(
+                    stage="Inductive Reasoning: Recursive Pattern Detection",
+                    description=f"Detected {pattern_name} pattern: {result['description'] if 'description' in result else result['rule']}",
+                    result=result,
+                    confidence=result['confidence'],
+                    evidence=f"Pattern rule: {result['rule']}. Next term: {result['next_term']}",
+                    assumptions=[f"Sequence follows {pattern_name.lower()} recurrence relation"]
+                )
+            return result
+
+    if reasoning_chain:
+        reasoning_chain.add_step(
+            stage="Inductive Reasoning: Recursive Pattern Detection",
+            description=f"No recursive pattern found in sequence: {sequence}",
+            result=None,
+            confidence=0.0
+        )
+
+    return None

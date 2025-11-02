@@ -22,36 +22,19 @@ def reset_global_state():
     The fixture uses autouse=True so it runs automatically before every test.
     """
     # Reset core module global registries
-    try:
-        from reasoning_library.core import ENHANCED_TOOL_REGISTRY, TOOL_REGISTRY
+    from reasoning_library.tool_registry import ENHANCED_TOOL_REGISTRY, TOOL_REGISTRY
 
-        TOOL_REGISTRY.clear()
-        ENHANCED_TOOL_REGISTRY.clear()
-    except ImportError:
-        # Handle case where import path differs
-        from src.reasoning_library.core import ENHANCED_TOOL_REGISTRY, TOOL_REGISTRY
-
-        TOOL_REGISTRY.clear()
-        ENHANCED_TOOL_REGISTRY.clear()
+    TOOL_REGISTRY.clear()
+    ENHANCED_TOOL_REGISTRY.clear()
 
     # Reset chain_of_thought module conversation storage
-    try:
-        from reasoning_library.chain_of_thought import (
-            _conversations,
-            _conversations_lock,
-        )
+    from reasoning_library.chain_of_thought import (
+        _conversations,
+        _conversations_lock,
+    )
 
-        with _conversations_lock:
-            _conversations.clear()
-    except ImportError:
-        # Handle case where import path differs
-        from src.reasoning_library.chain_of_thought import (
-            _conversations,
-            _conversations_lock,
-        )
-
-        with _conversations_lock:
-            _conversations.clear()
+    with _conversations_lock:
+        _conversations.clear()
 
     yield  # Run the test
 
@@ -65,10 +48,7 @@ def clean_tool_registry():
 
     Use this fixture explicitly in tests that specifically test tool registration.
     """
-    try:
-        from reasoning_library.core import ENHANCED_TOOL_REGISTRY, TOOL_REGISTRY
-    except ImportError:
-        from src.reasoning_library.core import ENHANCED_TOOL_REGISTRY, TOOL_REGISTRY
+    from reasoning_library.tool_registry import ENHANCED_TOOL_REGISTRY, TOOL_REGISTRY
 
     # Clear registries
     TOOL_REGISTRY.clear()
@@ -88,16 +68,10 @@ def clean_conversations():
 
     Use this fixture explicitly in tests that test conversation management.
     """
-    try:
-        from reasoning_library.chain_of_thought import (
-            _conversations,
-            _conversations_lock,
-        )
-    except ImportError:
-        from src.reasoning_library.chain_of_thought import (
-            _conversations,
-            _conversations_lock,
-        )
+    from reasoning_library.chain_of_thought import (
+        _conversations,
+        _conversations_lock,
+    )
 
     # Clear conversations
     with _conversations_lock:
@@ -117,10 +91,7 @@ def isolated_reasoning_chain():
 
     Use this when you need a guaranteed clean ReasoningChain for testing.
     """
-    try:
-        from reasoning_library.core import ReasoningChain
-    except ImportError:
-        from src.reasoning_library.core import ReasoningChain
+    from reasoning_library.core import ReasoningChain
 
     return ReasoningChain()
 
