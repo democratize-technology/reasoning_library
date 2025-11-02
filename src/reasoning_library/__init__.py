@@ -5,7 +5,7 @@ Enhanced tool specification system supporting AWS Bedrock and OpenAI compatibili
 with automatic confidence documentation for mathematical reasoning functions.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from typing import Any, Dict, List
 
@@ -17,7 +17,17 @@ from .core import get_openai_tools  # OpenAI ChatCompletions API format
 from .core import get_tool_specs  # Legacy format for backward compatibility
 from .core import ReasoningChain, ReasoningStep
 from .deductive import apply_modus_ponens
-from .inductive import find_pattern_description, predict_next_in_sequence
+from .inductive import (
+    find_pattern_description,
+    predict_next_in_sequence,
+    detect_recursive_pattern,
+    detect_polynomial_pattern,
+    detect_exponential_pattern,
+    detect_custom_step_patterns,
+    detect_fibonacci_pattern,
+    detect_lucas_pattern,
+    detect_tribonacci_pattern
+)
 from .abductive import generate_hypotheses, rank_hypotheses, evaluate_best_explanation
 
 
