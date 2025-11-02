@@ -5,7 +5,7 @@ Enhanced tool specification system supporting AWS Bedrock and OpenAI compatibili
 with automatic confidence documentation for mathematical reasoning functions.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 from typing import Any, Dict, List
 
