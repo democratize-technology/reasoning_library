@@ -342,6 +342,329 @@ def _find_common_themes(observations: List[str]) -> List[str]:
     return common_themes[:MAX_THEMES_RETURNED]  # Return top N themes
 
 
+def _generate_single_cause_hypothesis(
+    common_themes: List[str],
+    observations_count: int
+) -> Optional[Dict[str, Any]]:
+    """
+    Generate a single-cause hypothesis explaining all observations.
+
+    Args:
+        common_themes: List of common themes found in observations
+        observations_count: Number of observations to explain
+
+    Returns:
+        Optional[Dict]: Single-cause hypothesis or None if no themes
+    """
+    if not common_themes:
+        return None
+
+    primary_theme = common_themes[0]
+    single_cause = {
+        "hypothesis": f"The observations are caused by {primary_theme}",
+        "explains": list(range(observations_count)),
+        "confidence": 0.0,  # Will be calculated
+        "assumptions": [f"{primary_theme} is the primary cause"],
+        "testable_predictions": [
+            f"Removing {primary_theme} should stop the observations",
+            f"Changing {primary_theme} should change the observations"
+        ],
+        "type": "single_cause",
+        "theme": primary_theme
+    }
+    single_cause["confidence"] = _calculate_hypothesis_confidence(
+        single_cause, observations_count, observations_count, 1
+    )
+    return single_cause
+
+
+def _generate_multiple_causes_hypothesis(
+    common_themes: List[str],
+    observations_count: int
+) -> Optional[Dict[str, Any]]:
+    """
+    Generate a multiple-causes hypothesis explaining all observations.
+
+    Args:
+        common_themes: List of common themes found in observations
+        observations_count: Number of observations to explain
+
+    Returns:
+        Optional[Dict]: Multiple-causes hypothesis or None if insufficient themes
+    """
+    if len(common_themes) < 2:
+        return None
+
+    multiple_causes = {
+        "hypothesis": (
+            f"Multiple factors are contributing: {', '.join(common_themes[:3])}"
+        ),
+        "explains": list(range(observations_count)),
+        "confidence": 0.0,  # Will be calculated
+        "assumptions": [
+            f"{theme} is a contributing factor" for theme in common_themes[:3]
+        ],
+        "testable_predictions": [
+            "Addressing each factor should reduce corresponding observations",
+            "Combined intervention should have greater effect than individual"
+        ],
+        "type": "multiple_causes",
+        "themes": common_themes[:3]
+    }
+    multiple_causes["confidence"] = _calculate_hypothesis_confidence(
+        multiple_causes, observations_count, observations_count, len(common_themes[:3])
+    )
+    return multiple_causes
+
+
+def _generate_causal_chain_hypothesis(
+    observations_count: int
+) -> Optional[Dict[str, Any]]:
+    """
+    Generate a causal chain hypothesis explaining observations as a progression.
+
+    Args:
+        observations_count: Number of observations to explain
+
+    Returns:
+        Optional[Dict]: Causal chain hypothesis or None if insufficient observations
+    """
+    if observations_count < 2:
+        return None
+
+    causal_chain = {
+        "hypothesis": "The observations represent a causal chain or progression",
+        "explains": list(range(observations_count)),
+        "confidence": 0.0,  # Will be calculated
+        "assumptions": [
+            "Observations occur in a temporal sequence",
+            "Earlier observations influence later ones"
+        ],
+        "testable_predictions": [
+            "Intervening early should prevent later observations",
+            "Reversing the order should change outcomes"
+        ],
+        "type": "causal_chain"
+    }
+    causal_chain["confidence"] = _calculate_hypothesis_confidence(
+        causal_chain, observations_count, observations_count, 2
+    )
+    return causal_chain
+
+
+def _sanitize_template_input(text: str) -> str:
+    """
+    Remove dangerous characters that could be used in template injection.
+
+    Args:
+        text: Input text to sanitize
+
+    Returns:
+        str: Sanitized text safe for template formatting
+    """
+    if not isinstance(text, str):
+        return ""
+    # Remove curly braces and format specifiers that could break templates
+    sanitized = re.sub(r'[{}]', '', text)
+    # Remove potential format string injection patterns
+    sanitized = re.sub(r'\${[^}]*}', '', sanitized)  # ${...} patterns
+    sanitized = re.sub(r'%[sd]', '', sanitized)      # %s, %d patterns
+    return sanitized.strip()
+
+
+def _generate_domain_template_hypotheses(
+    observations: List[str],
+    context: str,
+    max_hypotheses: int,
+    observations_count: int
+) -> List[Dict[str, Any]]:
+    """
+    Generate domain-specific template hypotheses based on context.
+
+    Args:
+        observations: List of observations
+        context: Context information for domain detection
+        max_hypotheses: Maximum number of hypotheses to generate
+        observations_count: Number of observations
+
+    Returns:
+        List[Dict]: Domain template hypotheses
+    """
+    # Determine domain based on keywords
+    domain = None
+    all_text = " ".join(observations) + " " + context.lower()
+    # Additional safeguard: ensure all_text doesn't get too large even with validated inputs
+    if len(all_text) > DOMAIN_DETECTION_LIMIT:  # 50KB limit for domain detection
+        all_text = all_text[:DOMAIN_DETECTION_LIMIT]
+
+    for domain_name, domain_info in DOMAIN_TEMPLATES.items():
+        if any(keyword in all_text for keyword in domain_info["keywords"]):
+            domain = domain_name
+            break
+
+    if not domain:
+        return []
+
+    keywords = _extract_keywords_with_context(observations, context)
+    template_hyps = []
+
+    for idx, template in enumerate(
+        DOMAIN_TEMPLATES[domain]["templates"][:max_hypotheses]
+    ):
+        # Select best keywords for this template
+        action = (
+            keywords["actions"][0] if keywords["actions"] else "recent change"
+        )
+        component = (
+            keywords["components"][
+                min(idx, len(keywords["components"]) - 1)
+            ] if keywords["components"] else "system"
+        )
+        issue = (
+            keywords["issues"][
+                min(idx, len(keywords["issues"]) - 1)
+            ] if keywords["issues"] else "performance issue"
+        )
+
+        # SECURITY: Apply length limits IMMEDIATELY after keyword extraction
+        action = action[:KEYWORD_LENGTH_LIMIT].strip()
+        component = component[:COMPONENT_LENGTH_LIMIT].strip()
+        issue = issue[:ISSUE_LENGTH_LIMIT].strip()
+
+        # Validate inputs before template formatting
+        if not isinstance(action, str) or len(action.strip()) == 0:
+            action = "recent change"
+        if not isinstance(component, str) or len(component.strip()) == 0:
+            component = "system"
+        if not isinstance(issue, str) or len(issue.strip()) == 0:
+            issue = "performance issue"
+
+        # Sanitize all template inputs to prevent injection
+        safe_action = _sanitize_template_input(action)
+        safe_component = _sanitize_template_input(component)
+        safe_issue = _sanitize_template_input(issue)
+
+        # Fill template with sanitized inputs (SECURE: no injection possible)
+        hypothesis_text = template.format(
+            action=safe_action,
+            component=safe_component,
+            issue=safe_issue
+        )
+
+        # Capitalize first letter
+        hypothesis_text = hypothesis_text[0].upper() + hypothesis_text[1:]
+
+        template_hyps.append({
+            "hypothesis": hypothesis_text,
+            "explains": list(range(observations_count)),
+            "confidence": BASE_CONFIDENCE_TEMPLATE_HYPOTHESIS,
+            "assumptions": ["Context '{context}' is relevant to the issue"],
+            "testable_predictions": [
+                f"Reverting the {action} should reduce or resolve the {issue}",
+                f"Monitoring {component} metrics should show correlation with the issue"
+            ],
+            "type": "domain_template"
+        })
+
+    # Calculate confidence for template hypotheses
+    for hyp in template_hyps:
+        hyp["confidence"] = _calculate_hypothesis_confidence(
+            hyp, observations_count, observations_count, 1
+        )
+
+    return template_hyps
+
+
+def _generate_contextual_hypothesis(
+    observations: List[str],
+    context: str,
+    observations_count: int
+) -> Optional[Dict[str, Any]]:
+    """
+    Generate a contextual hypothesis when no domain matches.
+
+    Args:
+        observations: List of observations
+        context: Context information
+        observations_count: Number of observations
+
+    Returns:
+        Optional[Dict]: Contextual hypothesis or None
+    """
+    context_keywords = _extract_keywords(context)
+    if not context_keywords:
+        return None
+
+    # SECURITY: Apply length limits to keywords to prevent DoS in contextual hypotheses
+    safe_keywords = []
+    for keyword in context_keywords[:MAX_TEMPLATE_KEYWORDS]:
+        # Truncate each keyword to prevent long repetitive strings
+        safe_keyword = keyword[:KEYWORD_LENGTH_LIMIT].strip()
+        if safe_keyword:  # Only add non-empty keywords
+            safe_keywords.append(safe_keyword)
+
+    # Ensure we don't create overly long hypotheses
+    hypothesis_text = "The observations are related to the context"
+    if safe_keywords:
+        keyword_list = ', '.join(safe_keywords)
+        # Limit total hypothesis length
+        hypothesis_text = f"The observations are related to the context: {keyword_list}"
+        if len(hypothesis_text) > HYPOTHESIS_TEXT_HARD_LIMIT:  # Hard limit for contextual hypotheses
+            hypothesis_text = hypothesis_text[:HYPOTHESIS_TEXT_HARD_LIMIT].strip()
+
+    context_hypothesis = {
+        "hypothesis": hypothesis_text,
+        "explains": list(range(observations_count)),
+        "confidence": 0.0,  # Will be calculated
+        "assumptions": [
+            "Context is relevant to observations",
+            f"{safe_keywords[0] if safe_keywords else 'context'} is a key factor"
+        ],
+        "testable_predictions": [
+            "Changing the context should change the observations",
+            "Similar contexts should produce similar observations"
+        ],
+        "type": "contextual",
+        "context_keywords": safe_keywords
+    }
+    context_hypothesis["confidence"] = _calculate_hypothesis_confidence(
+        context_hypothesis, observations_count, observations_count, 2
+    )
+    return context_hypothesis
+
+
+def _generate_systemic_hypothesis(
+    observations_count: int
+) -> Dict[str, Any]:
+    """
+    Generate a systemic hypothesis about underlying system issues.
+
+    Args:
+        observations_count: Number of observations
+
+    Returns:
+        Dict: Systemic hypothesis
+    """
+    systemic = {
+        "hypothesis": "The observations indicate a systemic issue affecting multiple components",
+        "explains": list(range(observations_count)),
+        "confidence": 0.0,  # Will be calculated
+        "assumptions": [
+            "Multiple observations share a common root cause",
+            "System-wide factors are at play"
+        ],
+        "testable_predictions": [
+            "Addressing the root cause should resolve all observations",
+            "Similar issues may appear in other related areas"
+        ],
+        "type": "systemic"
+    }
+    systemic["confidence"] = _calculate_hypothesis_confidence(
+        systemic, observations_count, observations_count, 2
+    )
+    return systemic
+
+
 @tool_spec(
     mathematical_basis="Abductive reasoning - inference to the best explanation",
     confidence_factors=["coverage", "simplicity", "specificity"],
@@ -394,7 +717,7 @@ def generate_hypotheses(
                 stage="Abductive Reasoning: Hypothesis Generation",
                 description="No observations provided for hypothesis generation",
                 result=[],
-                confidence = 0.0
+                confidence=0.0
             )
         return []
 
@@ -403,250 +726,54 @@ def generate_hypotheses(
 
     # Find common themes in observations
     common_themes = _find_common_themes(observations)
+    observations_count = len(observations)
 
     # Generate different types of hypotheses
     hypotheses = []
 
-    # 1. Single - cause hypothesis (one explanation for all observations)
-    if common_themes:
-        primary_theme = common_themes[0]
-        single_cause = {
-            "hypothesis": f"The observations are caused by {primary_theme}",
-            "explains": list(range(len(observations))),
-            "confidence": 0.0,  # Will be calculated
-            "assumptions": [f"{primary_theme} is the primary cause"],
-            "testable_predictions": [
-                f"Removing {primary_theme} should stop the observations",
-                f"Changing {primary_theme} should change the observations"
-            ],
-            "type": "single_cause",
-            "theme": primary_theme
-        }
-        single_cause["confidence"] = _calculate_hypothesis_confidence(
-            single_cause, len(observations), len(observations), 1
-        )
+    # 1. Single-cause hypothesis
+    single_cause = _generate_single_cause_hypothesis(common_themes, observations_count)
+    if single_cause:
         hypotheses.append(single_cause)
 
-    # 2. Multiple - cause hypothesis (different causes for different observations)
-    if len(common_themes) >= 2:
-        multiple_causes = {
-            "hypothesis": (
-                f"Multiple factors are contributing: {', '.join(common_themes[:3])}"
-            ),
-            "explains": list(range(len(observations))),
-            "confidence": 0.0,  # Will be calculated
-            "assumptions": [
-                f"{theme} is a contributing factor" for theme in common_themes[:3]
-            ],
-            "testable_predictions": [
-                "Addressing each factor should reduce corresponding observations",
-                "Combined intervention should have greater effect than individual"
-            ],
-            "type": "multiple_causes",
-            "themes": common_themes[:3]
-        }
-        multiple_causes["confidence"] = _calculate_hypothesis_confidence(
-            multiple_causes, len(observations),
-                                 len(observations), len(common_themes[:3])
-        )
+    # 2. Multiple-causes hypothesis
+    multiple_causes = _generate_multiple_causes_hypothesis(common_themes, observations_count)
+    if multiple_causes:
         hypotheses.append(multiple_causes)
 
-    # 3. Temporal / causal chain hypothesis
-    if len(observations) >= 2:
-        causal_chain = {
-            "hypothesis": "The observations represent a causal chain or progression",
-            "explains": list(range(len(observations))),
-            "confidence": 0.0,  # Will be calculated
-            "assumptions": [
-                "Observations occur in a temporal sequence",
-                "Earlier observations influence later ones"
-            ],
-            "testable_predictions": [
-                "Intervening early should prevent later observations",
-                "Reversing the order should change outcomes"
-            ],
-            "type": "causal_chain"
-        }
-        causal_chain["confidence"] = _calculate_hypothesis_confidence(
-            causal_chain, len(observations), len(observations), 2
-        )
+    # 3. Causal chain hypothesis
+    causal_chain = _generate_causal_chain_hypothesis(observations_count)
+    if causal_chain:
         hypotheses.append(causal_chain)
 
-    # 4. Domain - specific template hypotheses (if context provided)
+    # 4. Domain-specific template hypotheses
     if context:
-        # Determine domain based on keywords
-        # SECURITY: Input size already validated at function entry, so observations and context are safe
-        domain = None
-        all_text = " ".join(observations) + " " + context.lower()
-        # Additional safeguard: ensure all_text doesn't get too large even with validated inputs
-        if len(all_text) > DOMAIN_DETECTION_LIMIT:  # 50KB limit for domain detection
-            all_text = all_text[:DOMAIN_DETECTION_LIMIT]
+        template_hyps = _generate_domain_template_hypotheses(
+            observations, context, max_hypotheses, observations_count
+        )
+        hypotheses.extend(template_hyps)
 
-        for domain_name, domain_info in DOMAIN_TEMPLATES.items():
-            if any(keyword in all_text for keyword in domain_info["keywords"]):
-                domain = domain_name
-                break
+        # 5. Contextual hypothesis (fallback if no domain matches)
+        if not template_hyps:
+            context_hyp = _generate_contextual_hypothesis(observations, context, observations_count)
+            if context_hyp:
+                hypotheses.append(context_hyp)
 
-        if domain:
-            keywords = _extract_keywords_with_context(observations, context)
-            template_hyps = []
-
-            for idx, template in enumerate(
-                DOMAIN_TEMPLATES[domain]["templates"][:max_hypotheses]
-            ):
-                # Select best keywords for this template
-                action = (
-                    keywords["actions"][0] if keywords["actions"] else "recent change"
-                )
-                component = (
-                    keywords["components"][
-                        min(idx, len(keywords["components"]) - 1)
-                    ] if keywords["components"] else "system"
-                )
-                issue = (
-                    keywords["issues"][
-                        min(idx, len(keywords["issues"]) - 1)
-                    ] if keywords["issues"] else "performance issue"
-                )
-
-                # SECURITY: Apply length limits IMMEDIATELY after keyword extraction
-                # This prevents DoS attacks from large strings that were extracted
-                action = action[:KEYWORD_LENGTH_LIMIT].strip()
-                component = component[:COMPONENT_LENGTH_LIMIT].strip()
-                issue = issue[:ISSUE_LENGTH_LIMIT].strip()
-
-                # Validate inputs before template formatting
-                if not isinstance(action, str) or len(action.strip()) == 0:
-                    action = "recent change"
-                if not isinstance(component, str) or len(component.strip()) == 0:
-                    component = "system"
-                if not isinstance(issue, str) or len(issue.strip()) == 0:
-                    issue = "performance issue"
-
-                # SECURE: Sanitize inputs to prevent template injection attacks
-                # Remove any template syntax characters that could break format strings
-
-                def sanitize_template_input(text: str) -> str:
-                    """Remove dangerous characters that could be used in template injection.
-                    """
-                    if not isinstance(text, str):
-                        return ""
-                    # Remove curly braces and format specifiers that could break
-                    # templates
-                    sanitized = re.sub(r'[{}]', '', text)
-                    # Remove potential format string injection patterns
-                    sanitized = re.sub(r'\${[^}]*}', '', sanitized)  # ${...} patterns
-                    sanitized = re.sub(r'%[sd]', '', sanitized)      # %s, %d patterns
-                    return sanitized.strip()
-
-                # Sanitize all template inputs to prevent injection
-                safe_action = sanitize_template_input(action)
-                safe_component = sanitize_template_input(component)
-                safe_issue = sanitize_template_input(issue)
-
-                # Fill template with sanitized inputs (SECURE: no injection possible)
-                hypothesis_text = template.format(
-                    action = safe_action,
-                    component = safe_component,
-                    issue = safe_issue
-                )
-
-                # Capitalize first letter
-                hypothesis_text = hypothesis_text[0].upper() + hypothesis_text[1:]
-
-                template_hyps.append({
-                    "hypothesis": hypothesis_text,
-                    "explains": list(range(len(observations))),
-                    "confidence": BASE_CONFIDENCE_TEMPLATE_HYPOTHESIS,
-                    "assumptions": ["Context '{context}' is relevant to the issue"],
-                    "testable_predictions": [
-                        f"Reverting the {action} should reduce or resolve the {issue}",
-                        f"Monitoring {component} metrics should show correlation with the issue"
-                    ],
-                    "type": "domain_template"
-                })
-
-            # Calculate confidence for template hypotheses
-            for hyp in template_hyps:
-                hyp["confidence"] = _calculate_hypothesis_confidence(
-                    hyp, len(observations), len(observations), 1
-                )
-
-            hypotheses.extend(template_hyps)
-        else:
-            # Fallback to original context hypothesis if no domain matches
-            context_keywords = _extract_keywords(context)
-            if context_keywords:
-                # SECURITY: Apply length limits to keywords to prevent DoS in contextual hypotheses
-                safe_keywords = []
-                for keyword in context_keywords[:MAX_TEMPLATE_KEYWORDS]:
-                    # Truncate each keyword to prevent long repetitive strings
-                    safe_keyword = keyword[:KEYWORD_LENGTH_LIMIT].strip()
-                    if safe_keyword:  # Only add non-empty keywords
-                        safe_keywords.append(safe_keyword)
-
-                # Ensure we don't create overly long hypotheses
-                hypothesis_text = "The observations are related to the context"
-                if safe_keywords:
-                    keyword_list = ', '.join(safe_keywords)
-                    # Limit total hypothesis length
-                    hypothesis_text = f"The observations are related to the context: {keyword_list}"
-                    if len(hypothesis_text) > HYPOTHESIS_TEXT_HARD_LIMIT:  # Hard limit for contextual hypotheses
-                        hypothesis_text = hypothesis_text[:HYPOTHESIS_TEXT_HARD_LIMIT].strip()
-
-                context_hypothesis = {
-                    "hypothesis": hypothesis_text,
-                    "explains": list(range(len(observations))),
-                    "confidence": 0.0,  # Will be calculated
-                    "assumptions": [
-                        "Context is relevant to observations",
-                        f"{safe_keywords[0] if safe_keywords else 'context'} is a key factor"
-                    ],
-                    "testable_predictions": [
-                        "Changing the context should change the observations",
-                        "Similar contexts should produce similar observations"
-                    ],
-                    "type": "contextual",
-                    "context_keywords": safe_keywords
-                }
-                context_hypothesis["confidence"] = _calculate_hypothesis_confidence(
-                    context_hypothesis, len(observations), len(observations), 2
-                )
-                hypotheses.append(context_hypothesis)
-
-    # 5. Systemic hypothesis (underlying system issue)
-    systemic = {
-        "hypothesis": "The observations indicate a systemic issue affecting multiple components",
-        "explains": list(range(len(observations))),
-        "confidence": 0.0,  # Will be calculated
-        "assumptions": [
-            "Multiple observations share a common root cause",
-            "System - wide factors are at play"
-        ],
-        "testable_predictions": [
-            "Addressing the root cause should resolve all observations",
-            "Similar issues may appear in other related areas"
-        ],
-        "type": "systemic"
-    }
-    systemic["confidence"] = _calculate_hypothesis_confidence(
-        systemic, len(observations), len(observations), 2
-    )
+    # 6. Systemic hypothesis
+    systemic = _generate_systemic_hypothesis(observations_count)
     hypotheses.append(systemic)
 
-    # Sort hypotheses by confidence
+    # Sort hypotheses by confidence and limit to max_hypotheses
     hypotheses.sort(key=lambda x: x["confidence"], reverse=True)
-
-    # Limit to max_hypotheses
     hypotheses = hypotheses[:max_hypotheses]
 
     if reasoning_chain:
         reasoning_chain.add_step(
-            stage = stage,
-            description = description,
-            result = hypotheses,
-            confidence = max([h["confidence"] for h in hypotheses]) if hypotheses else 0.0,
-            evidence = f"Generated {len(hypotheses)} hypotheses from {len(observations)} observations",
+            stage=stage,
+            description=description,
+            result=hypotheses,
+            confidence=max([h["confidence"] for h in hypotheses]) if hypotheses else 0.0,
+            evidence=f"Generated {len(hypotheses)} hypotheses from {len(observations)} observations",
             assumptions=[
                 "Observations are accurate and relevant",
                 "Generated hypotheses are plausible"

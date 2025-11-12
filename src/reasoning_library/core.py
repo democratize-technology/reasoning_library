@@ -266,20 +266,14 @@ class ToolMetadata:
     confidence_factors: Optional[List[str]] = field(default_factory = list)
 
 
-def _detect_mathematical_reasoning_uncached(
-    func: Callable[..., Any],
-) -> Tuple[bool, Optional[str], Optional[str]]:
+def _get_mathematical_indicators() -> List[str]:
     """
-    Detect if a function performs mathematical reasoning and
-        extract confidence documentation.
-
-    Optimized to perform fast initial checks before expensive source code extraction.
+    Get the list of mathematical reasoning indicators.
 
     Returns:
-        tuple: (is_mathematical, confidence_documentation, mathematical_basis)
+        List[str]: List of mathematical reasoning keywords
     """
-    # Check for mathematical reasoning indicators
-    math_indicators = [
+    return [
         "confidence",
         "probability",
         "statistical",
@@ -297,23 +291,173 @@ def _detect_mathematical_reasoning_uncached(
         "reasoning_chain",
     ]
 
-    # Fast initial check using only docstring and function name
+
+def _has_mathematical_indicators_in_docs(
+    func: Callable[..., Any],
+    math_indicators: List[str]
+) -> bool:
+    """
+    Fast initial check for mathematical indicators using only docstring and function name.
+
+    Args:
+        func: The function to check
+        math_indicators: List of mathematical reasoning keywords
+
+    Returns:
+        bool: True if mathematical indicators found in docs/name
+    """
     docstring = func.__doc__ or ""
     func_name = getattr(func, "__name__", "")
 
-    # Quick check without source code extraction
-    has_math_indicators_in_docs = any(
+    return any(
         indicator in docstring.lower() or indicator in func_name.lower()
         for indicator in math_indicators
     )
 
-    # If no mathematical indicators in docs / name, likely not mathematical
-    if not has_math_indicators_in_docs:
+
+def _extract_confidence_factors(source_code: str, docstring: str) -> List[str]:
+    """
+    Extract confidence calculation patterns from source code and docstring.
+
+    Args:
+        source_code: The function's source code
+        docstring: The function's docstring
+
+    Returns:
+        List[str]: List of confidence factors found
+    """
+    confidence_factors = []
+
+    # Pattern 1: Extract confidence factor variable names using pre-compiled pattern
+    factor_matches = FACTOR_PATTERN.findall(source_code)
+    if factor_matches:
+        confidence_factors.extend(
+            [factor.replace("_", " ") for factor in factor_matches[:3]]
+        )
+
+    # Pattern 2: Extract meaningful descriptive comments using pre-compiled pattern
+    comment_matches = COMMENT_PATTERN.findall(source_code)
+    if comment_matches:
+        confidence_factors.extend(
+            [match.strip().lower() for match in comment_matches[:2]]
+        )
+
+    # Pattern 3: Extract from evidence strings with confidence calculations using pre-compiled pattern
+    evidence_matches = EVIDENCE_PATTERN.findall(source_code)
+    if evidence_matches:
+        confidence_factors.extend([match.strip() for match in evidence_matches[:1]])
+
+    # Pattern 4: Look for factor multiplication combinations using pre-compiled pattern
+    combination_matches = COMBINATION_PATTERN.findall(source_code)
+    if combination_matches and not confidence_factors:
+        # If we haven't found factors yet, use the combination pattern
+        factor_names = []
+        for match in combination_matches[:2]:
+            factor_names.extend(
+                [
+                    factor.replace("_factor", "").replace("_", " ")
+                    for factor in match
+                ]
+            )
+        confidence_factors.extend(list(set(factor_names)))  # Remove duplicates
+
+    # Pattern 5: Extract from docstring confidence patterns
+    if "confidence" in docstring.lower() and "based on" in docstring.lower():
+        # Look for specific patterns in docstring
+        if "pattern quality" in docstring.lower():
+            confidence_factors.extend(["pattern quality"])
+        if "pattern" in docstring.lower() and not confidence_factors:
+            confidence_factors.extend(["pattern analysis"])
+
+    return confidence_factors
+
+
+def _clean_confidence_factors(confidence_factors: List[str]) -> List[str]:
+    """
+    Clean and deduplicate confidence factors.
+
+    Args:
+        confidence_factors: Raw confidence factors
+
+    Returns:
+        List[str]: Cleaned and deduplicated factors
+    """
+    clean_factors = []
+    seen = set()
+    for factor in confidence_factors:
+        clean_factor = factor.strip().lower()
+        # Remove common code artifacts using pre-compiled pattern
+        clean_factor = CLEAN_FACTOR_PATTERN.sub("", clean_factor).strip()
+        if clean_factor and clean_factor not in seen and len(clean_factor) > 2:
+            clean_factors.append(clean_factor)
+            seen.add(clean_factor)
+
+    return clean_factors
+
+
+def _create_confidence_documentation(clean_factors: List[str]) -> Optional[str]:
+    """
+    Create confidence documentation from cleaned factors.
+
+    Args:
+        clean_factors: List of cleaned confidence factors
+
+    Returns:
+        Optional[str]: Formatted confidence documentation or None
+    """
+    if clean_factors:
+        return f"Confidence calculation based on: {', '.join(clean_factors[:3])}"
+    return None
+
+
+def _extract_mathematical_basis(docstring: str) -> Optional[str]:
+    """
+    Extract mathematical basis from docstring.
+
+    Args:
+        docstring: The function's docstring
+
+    Returns:
+        Optional[str]: Mathematical basis description or None
+    """
+    docstring_lower = docstring.lower()
+
+    if "arithmetic progression" in docstring_lower:
+        return (
+            "Arithmetic progression analysis with data sufficiency and "
+            "pattern quality factors"
+        )
+    elif "geometric progression" in docstring_lower:
+        return "Geometric progression analysis with ratio consistency validation"
+    elif "modus ponens" in docstring_lower:
+        return "Formal deductive logic using Modus Ponens inference rule"
+    elif "chain of thought" in docstring_lower:
+        return "Sequential reasoning with conservative confidence aggregation (minimum of step confidences)"
+
+    return None
+
+
+def _detect_mathematical_reasoning_uncached(
+    func: Callable[..., Any],
+) -> Tuple[bool, Optional[str], Optional[str]]:
+    """
+    Detect if a function performs mathematical reasoning and extract confidence documentation.
+
+    Optimized to perform fast initial checks before expensive source code extraction.
+
+    Returns:
+        tuple: (is_mathematical, confidence_documentation, mathematical_basis)
+    """
+    # Get mathematical indicators
+    math_indicators = _get_mathematical_indicators()
+
+    # Fast initial check using only docstring and function name
+    if not _has_mathematical_indicators_in_docs(func, math_indicators):
         return False, None, None
 
     # Only extract source code if initial check suggests mathematical reasoning
-    # Use cached source code retrieval for performance optimization
     source_code = _get_function_source_cached(func)
+    docstring = func.__doc__ or ""
 
     # Final check including source code
     is_mathematical = any(
@@ -321,90 +465,18 @@ def _detect_mathematical_reasoning_uncached(
         for indicator in math_indicators
     )
 
-    confidence_doc = None
-    mathematical_basis = None
+    if not is_mathematical:
+        return False, None, None
 
-    if is_mathematical:
-        # Extract confidence calculation patterns with improved semantic focus
-        confidence_factors = []
+    # Extract confidence factors and create documentation
+    confidence_factors = _extract_confidence_factors(source_code, docstring)
+    clean_factors = _clean_confidence_factors(confidence_factors)
+    confidence_doc = _create_confidence_documentation(clean_factors)
 
-        # Pattern 1: Extract confidence factor variable names using pre - compiled pattern
-        factor_matches = FACTOR_PATTERN.findall(source_code)
-        if factor_matches:
-            confidence_factors.extend(
-                [factor.replace("_", " ") for factor in factor_matches[:3]]
-            )
+    # Extract mathematical basis
+    mathematical_basis = _extract_mathematical_basis(docstring)
 
-        # Pattern 2: Extract meaningful descriptive comments using pre - compiled pattern
-        comment_matches = COMMENT_PATTERN.findall(source_code)
-        if comment_matches:
-            confidence_factors.extend(
-                [match.strip().lower() for match in comment_matches[:2]]
-            )
-
-        # Pattern 3: Extract from evidence strings with confidence calculations using pre - compiled pattern
-        evidence_matches = EVIDENCE_PATTERN.findall(source_code)
-        if evidence_matches:
-            confidence_factors.extend([match.strip() for match in evidence_matches[:1]])
-
-        # Pattern 4: Look for factor multiplication combinations using pre - compiled pattern
-        combination_matches = COMBINATION_PATTERN.findall(source_code)
-        if combination_matches and not confidence_factors:
-            # If we haven't found factors yet, use the combination pattern
-            factor_names = []
-            for match in combination_matches[:2]:
-                factor_names.extend(
-                    [
-                        factor.replace("_factor", "").replace("_", " ")
-                        for factor in match
-                    ]
-                )
-            confidence_factors.extend(list(set(factor_names)))  # Remove duplicates
-
-        # Pattern 5: Extract from docstring confidence patterns
-        if "confidence" in docstring.lower() and "based on" in docstring.lower():
-            # Look for specific patterns in docstring
-            if "pattern quality" in docstring.lower():
-                confidence_factors.extend(["pattern quality"])
-            if "pattern" in docstring.lower() and not confidence_factors:
-                confidence_factors.extend(["pattern analysis"])
-
-        # Create meaningful confidence documentation
-        if confidence_factors:
-            # Clean and deduplicate factors
-            clean_factors = []
-            seen = set()
-            for factor in confidence_factors:
-                clean_factor = factor.strip().lower()
-                # Remove common code artifacts using pre - compiled pattern
-                clean_factor = CLEAN_FACTOR_PATTERN.sub("", clean_factor).strip()
-                if clean_factor and clean_factor not in seen and len(clean_factor) > 2:
-                    clean_factors.append(clean_factor)
-                    seen.add(clean_factor)
-
-            if clean_factors:
-                confidence_doc = (
-                    f"Confidence calculation based on: {', '.join(clean_factors[:3])}"
-                )
-
-        # Extract mathematical basis from docstring or code
-        if "arithmetic progression" in docstring.lower():
-            mathematical_basis = (
-                "Arithmetic progression analysis with data sufficiency and "
-                "pattern quality factors"
-            )
-        elif "geometric progression" in docstring.lower():
-            mathematical_basis = (
-                "Geometric progression analysis with ratio consistency validation"
-            )
-        elif "modus ponens" in docstring.lower():
-            mathematical_basis = (
-                "Formal deductive logic using Modus Ponens inference rule"
-            )
-        elif "chain of thought" in docstring.lower():
-            mathematical_basis = "Sequential reasoning with conservative confidence aggregation (minimum of step confidences)"
-
-        return is_mathematical, confidence_doc, mathematical_basis
+    return is_mathematical, confidence_doc, mathematical_basis
 
 
 def _detect_mathematical_reasoning(

@@ -6,7 +6,7 @@ pattern recognition in numerical sequences.
 """
 
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import numpy.typing as npt
@@ -389,6 +389,113 @@ def _calculate_geometric_confidence(
     return min(CONFIDENCE_MAX, max(CONFIDENCE_MIN, confidence))
 
 
+def _validate_sequence_input(sequence: List[float]) -> None:
+    """
+    Validate sequence input for pattern prediction.
+
+    Args:
+        sequence: Input sequence to validate
+
+    Raises:
+        ValidationError: If sequence is invalid
+    """
+    if not isinstance(sequence, (list, tuple, np.ndarray)):
+        raise ValidationError(
+            f"Expected list/tuple/array for sequence, got {type(sequence).__name__}"
+        )
+    if len(sequence) == 0:
+        raise ValidationError("Sequence cannot be empty")
+
+
+def _check_arithmetic_progression(
+    sequence: List[float],
+    rtol: float,
+    atol: float
+) -> Tuple[Optional[float], Optional[float], Optional[str]]:
+    """
+    Check if sequence follows an arithmetic progression and predict next value.
+
+    Args:
+        sequence: Input sequence
+        rtol: Relative tolerance for pattern detection
+        atol: Absolute tolerance for pattern detection
+
+    Returns:
+        Tuple[Optional[float], Optional[float], Optional[str]]:
+            (predicted_value, confidence, description) or (None, None, None)
+    """
+    diffs = np.diff(sequence)
+    if len(diffs) > 0 and np.allclose(diffs, diffs[0], rtol=rtol, atol=atol):
+        result = float(sequence[-1] + diffs[0])
+        confidence = _calculate_arithmetic_confidence(diffs, len(sequence))
+        description = f"Identified arithmetic progression with common difference: {diffs[0]}. Predicted next: {result}"
+        return result, confidence, description
+
+    return None, None, None
+
+
+def _check_geometric_progression(
+    sequence: List[float],
+    rtol: float,
+    atol: float
+) -> Tuple[Optional[float], Optional[float], Optional[str]]:
+    """
+    Check if sequence follows a geometric progression and predict next value.
+
+    Args:
+        sequence: Input sequence
+        rtol: Relative tolerance for pattern detection
+        atol: Absolute tolerance for pattern detection
+
+    Returns:
+        Tuple[Optional[float], Optional[float], Optional[str]]:
+            (predicted_value, confidence, description) or (None, None, None)
+    """
+    if all(s != 0 for s in sequence):
+        ratios_list = [sequence[i] / sequence[i - 1] for i in range(1, len(sequence))]
+        # Add bounds checking to prevent extreme values
+        ratios = list(np.clip(ratios_list, -1e6, 1e6))
+        if len(ratios) > 0 and np.allclose(ratios, ratios[0], rtol=rtol, atol=atol):
+            result = float(sequence[-1] * ratios[0])
+            confidence = _calculate_geometric_confidence(ratios, len(sequence))
+            description = f"Identified geometric progression with common ratio: {ratios[0]}. Predicted next: {result}"
+            return result, confidence, description
+
+    return None, None, None
+
+
+def _add_reasoning_step(
+    reasoning_chain: Optional[ReasoningChain],
+    stage: str,
+    description: str,
+    result: Optional[float],
+    confidence: float,
+    evidence: Optional[str] = None,
+    assumptions: Optional[List[str]] = None
+) -> None:
+    """
+    Add a step to the reasoning chain if provided.
+
+    Args:
+        reasoning_chain: Optional reasoning chain to add step to
+        stage: Stage name for the reasoning step
+        description: Description of the reasoning step
+        result: Result of the reasoning step
+        confidence: Confidence level of the result
+        evidence: Optional evidence supporting the result
+        assumptions: Optional assumptions made during reasoning
+    """
+    if reasoning_chain:
+        reasoning_chain.add_step(
+            stage=stage,
+            description=description,
+            result=result,
+            confidence=confidence,
+            evidence=evidence,
+            assumptions=assumptions,
+        )
+
+
 @tool_spec(
     mathematical_basis="Arithmetic and geometric progression analysis",
     confidence_factors=["data_sufficiency", "pattern_quality", "complexity"],
@@ -421,79 +528,42 @@ def predict_next_in_sequence(
         ValidationError: If sequence is not a list, tuple, or numpy array or is empty.
     """
     # Input validation
-    if not isinstance(sequence, (list, tuple, np.ndarray)):
-        raise ValidationError(
-            f"Expected list/tuple/array for sequence, got {type(sequence).__name__}"
-        )
-    if len(sequence) == 0:
-        raise ValidationError("Sequence cannot be empty")
+    _validate_sequence_input(sequence)
+
     stage = "Inductive Reasoning: Sequence Prediction"
     description = f"Attempting to predict next number in sequence: {sequence}"
-    result = None
-    confidence = 0.0
-    evidence = None
     assumptions = ["Sequence follows a simple arithmetic or geometric progression."]
 
     if len(sequence) < 2:
-        description = f"Sequence {sequence} too short to determine a pattern."
-        if reasoning_chain:
-            reasoning_chain.add_step(
-                stage = stage, description = description, result = None, confidence = 0.0
-            )
+        short_sequence_desc = f"Sequence {sequence} too short to determine a pattern."
+        _add_reasoning_step(reasoning_chain, stage, short_sequence_desc, None, 0.0)
         return None
 
     # Check for arithmetic progression
-    diffs = np.diff(sequence)
-    if len(diffs) > 0 and np.allclose(diffs, diffs[0], rtol = rtol, atol = atol):
-        result = float(sequence[-1] + diffs[0])
-        confidence = _calculate_arithmetic_confidence(diffs, len(sequence))
-        description = f"Identified arithmetic progression with common difference: {diffs[0]}. Predicted next: {result}"
+    result, confidence, description = _check_arithmetic_progression(sequence, rtol, atol)
+    if result is not None:
         evidence = (
-            f"Common difference {diffs[0]} found in {diffs}. "
+            f"Common difference {np.diff(sequence)[0]} found in {np.diff(sequence)}. "
             "Confidence based on pattern quality and data sufficiency."
         )
-        if reasoning_chain:
-            reasoning_chain.add_step(
-                stage = stage,
-                description = description,
-                result = result,
-                confidence = confidence,
-                evidence = evidence,
-                assumptions = assumptions,
-            )
+        _add_reasoning_step(reasoning_chain, stage, description, result, confidence, evidence, assumptions)
         return result
 
     # Check for geometric progression
-    if all(s != 0 for s in sequence):
+    result, confidence, description = _check_geometric_progression(sequence, rtol, atol)
+    if result is not None:
         ratios_list = [sequence[i] / sequence[i - 1] for i in range(1, len(sequence))]
-        # Add bounds checking to prevent extreme values
         ratios = list(np.clip(ratios_list, -1e6, 1e6))
-        if len(ratios) > 0 and np.allclose(ratios, ratios[0], rtol = rtol, atol = atol):
-            result = float(sequence[-1] * ratios[0])
-            confidence = _calculate_geometric_confidence(ratios, len(sequence))
-            description = f"Identified geometric progression with common ratio: {ratios[0]}. Predicted next: {result}"
-            evidence = (
-                f"Common ratio {ratios[0]} found in {ratios}. "
-                "Confidence based on pattern quality and data sufficiency."
-            )
-            if reasoning_chain:
-                reasoning_chain.add_step(
-                    stage = stage,
-                    description = description,
-                    result = result,
-                    confidence = confidence,
-                    evidence = evidence,
-                    assumptions = assumptions,
-                )
-            return result
-
-    description = (
-        f"No simple arithmetic or geometric pattern found for sequence: {sequence}"
-    )
-    if reasoning_chain:
-        reasoning_chain.add_step(
-            stage = stage, description = description, result = None, confidence = 0.0
+        evidence = (
+            f"Common ratio {ratios[0]} found in {ratios}. "
+            "Confidence based on pattern quality and data sufficiency."
         )
+        _add_reasoning_step(reasoning_chain, stage, description, result, confidence, evidence, assumptions)
+        return result
+
+    # No pattern found
+    no_pattern_desc = f"No simple arithmetic or geometric pattern found for sequence: {sequence}"
+    _add_reasoning_step(reasoning_chain, stage, no_pattern_desc, None, 0.0)
     return None
 
 
