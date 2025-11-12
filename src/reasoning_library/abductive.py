@@ -328,11 +328,29 @@ def generate_hypotheses(
                 component = component[:50].strip()
                 issue = issue[:100].strip()
 
-                # Fill template with validated inputs
+                # SECURE: Sanitize inputs to prevent template injection attacks
+                # Remove any template syntax characters that could break format strings
+                def sanitize_template_input(text: str) -> str:
+                    """Remove dangerous characters that could be used in template injection."""
+                    if not isinstance(text, str):
+                        return ""
+                    # Remove curly braces and format specifiers that could break templates
+                    sanitized = re.sub(r'[{}]', '', text)
+                    # Remove potential format string injection patterns
+                    sanitized = re.sub(r'\${[^}]*}', '', sanitized)  # ${...} patterns
+                    sanitized = re.sub(r'%[sd]', '', sanitized)      # %s, %d patterns
+                    return sanitized.strip()
+
+                # Sanitize all template inputs to prevent injection
+                safe_action = sanitize_template_input(action)
+                safe_component = sanitize_template_input(component)
+                safe_issue = sanitize_template_input(issue)
+
+                # Fill template with sanitized inputs (SECURE: no injection possible)
                 hypothesis_text = template.format(
-                    action=action,
-                    component=component,
-                    issue=issue
+                    action=safe_action,
+                    component=safe_component,
+                    issue=safe_issue
                 )
 
                 # Capitalize first letter

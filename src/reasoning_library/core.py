@@ -371,7 +371,12 @@ def _detect_mathematical_reasoning(
 
 def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Safely copy tool specification with input validation to prevent prototype pollution.
+    SECURE: Safely copy tool specification with input validation to prevent injection attacks.
+
+    Prevents multiple injection vectors:
+    - Prototype pollution through dangerous keys like __proto__
+    - Code injection through malicious function names and descriptions
+    - Template injection through parameter descriptions
 
     Args:
         tool_spec: Tool specification to copy
@@ -391,27 +396,104 @@ def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(tool_spec["function"], dict):
         raise ValueError("Tool specification 'function' value must be a dictionary")
 
+    def sanitize_text_input(text: Any, max_length: int = 1000) -> str:
+        """SECURE: Sanitize text inputs to prevent injection attacks."""
+        if not isinstance(text, str):
+            return ""
+
+        # Truncate to reasonable length
+        text = text[:max_length]
+
+        # Remove dangerous characters that could be used for injection
+        sanitized = re.sub(r'[<>"\'`]', '', text)  # Remove HTML/JS injection characters
+        sanitized = re.sub(r'[{}]', '', sanitized)  # Remove template injection characters
+        sanitized = re.sub(r'\${[^}]*}', '', sanitized)  # Remove ${...} patterns
+        sanitized = re.sub(r'%[sd]', '', sanitized)      # Remove %s, %d patterns
+        sanitized = re.sub(r'__import__\s*\(', 'BLOCKED', sanitized)  # Block import attempts
+        sanitized = re.sub(r'eval\s*\(', 'BLOCKED', sanitized)      # Block eval attempts
+        sanitized = re.sub(r'exec\s*\(', 'BLOCKED', sanitized)      # Block exec attempts
+
+        # Remove newlines and other control characters that could poison logs
+        sanitized = re.sub(r'[\r\n\t]', ' ', sanitized)
+
+        return sanitized.strip()
+
     # Whitelist of allowed top-level keys to prevent prototype pollution
     allowed_top_level_keys = {"type", "function"}
 
     # Whitelist of allowed function keys
     allowed_function_keys = {"name", "description", "parameters"}
 
+    # Blacklist of dangerous keys that could indicate prototype pollution
+    dangerous_keys = {"__proto__", "constructor", "prototype", "prototypeof"}
+
     # Create safe copy with only whitelisted keys
     safe_spec = {}
     for key, value in tool_spec.items():
+        # Skip dangerous keys that could cause prototype pollution
+        if key in dangerous_keys:
+            continue
+
         if key in allowed_top_level_keys:
             if key == "function":
-                # Safely copy function object with whitelisted keys only
+                # Safely copy function object with whitelisted keys and sanitization
                 safe_function = {}
                 for func_key, func_value in value.items():
                     if func_key in allowed_function_keys:
-                        safe_function[func_key] = func_value
+                        # Sanitize all string values to prevent injection
+                        if func_key == "name":
+                            safe_function[func_key] = sanitize_text_input(func_value, max_length=50)
+                        elif func_key == "description":
+                            safe_function[func_key] = sanitize_text_input(func_value, max_length=500)
+                        elif func_key == "parameters" and isinstance(func_value, dict):
+                            # Recursively sanitize parameter object
+                            safe_function[func_key] = _sanitize_parameters(func_value)
+                        else:
+                            safe_function[func_key] = func_value
                 safe_spec[key] = safe_function
             else:
-                safe_spec[key] = value
+                safe_spec[key] = sanitize_text_input(value, max_length=100)
 
     return safe_spec
+
+
+def _sanitize_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
+    """SECURE: Recursively sanitize parameter objects to prevent injection."""
+    if not isinstance(parameters, dict):
+        return {}
+
+    safe_params = {}
+
+    # Process properties
+    if "properties" in parameters and isinstance(parameters["properties"], dict):
+        safe_params["properties"] = {}
+        for param_name, param_spec in parameters["properties"].items():
+            # Sanitize parameter name
+            safe_name = re.sub(r'[^a-zA-Z0-9_]', '', str(param_name))[:50]
+            if not safe_name:
+                safe_name = "param"
+
+            # Sanitize parameter specification
+            if isinstance(param_spec, dict):
+                safe_spec = {}
+                for spec_key, spec_value in param_spec.items():
+                    if isinstance(spec_value, str):
+                        safe_spec[spec_key] = re.sub(r'[<>"\'`{}]', '', spec_value)[:200]
+                    else:
+                        safe_spec[spec_key] = spec_value
+                safe_params["properties"][safe_name] = safe_spec
+
+    # Copy other parameter fields safely
+    for key, value in parameters.items():
+        if key != "properties":
+            if isinstance(value, str):
+                safe_params[key] = re.sub(r'[<>"\'`{}]', '', value)[:100]
+            elif isinstance(value, (list, tuple)):
+                safe_params[key] = [str(item)[:50] for item in value]
+            else:
+                safe_params[key] = value
+
+    return safe_params
 
 
 def _openai_format(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
@@ -461,14 +543,16 @@ def _enhance_description_with_confidence_docs(
     description: str, metadata: ToolMetadata
 ) -> str:
     """
-    Enhance tool description with confidence documentation for mathematical reasoning functions.
+    SECURE: Enhance tool description with confidence documentation for mathematical reasoning functions.
+
+    Sanitizes all metadata to prevent injection attacks before inclusion in descriptions.
 
     Args:
         description: Original function description
         metadata: Tool metadata containing confidence information
 
     Returns:
-        Enhanced description with confidence documentation
+        Enhanced description with sanitized confidence documentation
     """
     if not metadata.is_mathematical_reasoning:
         return description
@@ -477,20 +561,49 @@ def _enhance_description_with_confidence_docs(
     if "Mathematical Basis:" in description:
         return description
 
-    enhanced_desc = description
+    def sanitize_confidence_text(text: Any) -> str:
+        """SECURE: Sanitize confidence-related text to prevent injection."""
+        if not isinstance(text, str):
+            return ""
 
+        # Remove dangerous characters that could be used for injection
+        sanitized = re.sub(r'[<>"\'`]', '', text)  # Remove HTML/JS injection characters
+        sanitized = re.sub(r'[{}]', '', sanitized)  # Remove template injection characters
+        sanitized = re.sub(r'\${[^}]*}', '', sanitized)  # Remove ${...} patterns
+        sanitized = re.sub(r'%[sd]', '', sanitized)      # Remove %s, %d patterns
+        sanitized = re.sub(r'__import__\s*\(', 'BLOCKED', sanitized)  # Block import attempts
+        sanitized = re.sub(r'eval\s*\(', 'BLOCKED', sanitized)      # Block eval attempts
+        sanitized = re.sub(r'exec\s*\(', 'BLOCKED', sanitized)      # Block exec attempts
+
+        # Remove control characters that could poison logs
+        sanitized = re.sub(r'[\r\n\t]', ' ', sanitized)
+
+        return sanitized.strip()
+
+    # Sanitize original description
+    enhanced_desc = sanitize_confidence_text(description)
+
+    # Sanitize mathematical basis
     if metadata.mathematical_basis:
-        enhanced_desc += f"\n\nMathematical Basis: {metadata.mathematical_basis}"
+        safe_basis = sanitize_confidence_text(metadata.mathematical_basis)
+        enhanced_desc += f"\n\nMathematical Basis: {safe_basis}"
 
     # Generate confidence documentation from explicit factors if available
     if metadata.confidence_factors:
-        enhanced_desc += f"\n\nConfidence Scoring: Confidence calculation based on: {', '.join(metadata.confidence_factors)}"
+        # Sanitize each confidence factor
+        safe_factors = [sanitize_confidence_text(factor) for factor in metadata.confidence_factors if factor]
+        safe_factors = [factor for factor in safe_factors if factor]  # Remove empty strings
+        if safe_factors:
+            enhanced_desc += f"\n\nConfidence Scoring: Confidence calculation based on: {', '.join(safe_factors[:5])}"
     elif metadata.confidence_documentation:
         # Fallback to existing documentation if factors are not provided
-        enhanced_desc += f"\n\nConfidence Scoring: {metadata.confidence_documentation}"
+        safe_doc = sanitize_confidence_text(metadata.confidence_documentation)
+        enhanced_desc += f"\n\nConfidence Scoring: {safe_doc}"
 
+    # Sanitize confidence formula
     if metadata.confidence_formula:
-        enhanced_desc += f"\n\nConfidence Formula: {metadata.confidence_formula}"
+        safe_formula = sanitize_confidence_text(metadata.confidence_formula)
+        enhanced_desc += f"\n\nConfidence Formula: {safe_formula}"
 
     return enhanced_desc
 
