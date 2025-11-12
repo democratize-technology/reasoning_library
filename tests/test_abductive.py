@@ -2,7 +2,7 @@
 Tests for abductive reasoning module.
 """
 
-from src.reasoning_library.abductive import (
+from reasoning_library.abductive import (
     DOMAIN_TEMPLATES,
     _extract_keywords_with_context,
     generate_hypotheses,

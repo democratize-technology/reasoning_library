@@ -9,7 +9,7 @@ The vulnerability was identified and fixed during code review on 2025-01-20.
 """
 
 import pytest
-from src.reasoning_library.abductive import generate_hypotheses
+from reasoning_library.abductive import generate_hypotheses
 
 
 class TestContextualDoSVulnerabilityFix:

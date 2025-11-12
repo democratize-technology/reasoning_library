@@ -4,9 +4,9 @@ This test shows the vulnerability at line 547 in abductive.py.
 """
 
 import pytest
-from src.reasoning_library.abductive import rank_hypotheses
-from src.reasoning_library.core import ReasoningChain
-from src.reasoning_library.exceptions import ValidationError
+from reasoning_library.abductive import rank_hypotheses
+from reasoning_library.core import ReasoningChain
+from reasoning_library.exceptions import ValidationError
 
 
 def test_type_coercion_bug_demonstration():

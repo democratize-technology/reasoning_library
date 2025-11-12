@@ -4,9 +4,9 @@ This test shows that the type coercion vulnerability has been fixed.
 """
 
 import pytest
-from src.reasoning_library.abductive import rank_hypotheses
-from src.reasoning_library.core import ReasoningChain
-from src.reasoning_library.exceptions import ValidationError
+from reasoning_library.abductive import rank_hypotheses
+from reasoning_library.core import ReasoningChain
+from reasoning_library.exceptions import ValidationError
 
 
 def test_string_confidence_now_raises_validation_error():

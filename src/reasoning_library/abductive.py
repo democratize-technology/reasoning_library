@@ -13,6 +13,7 @@ from collections import defaultdict
 
 from .core import ReasoningChain, curry, tool_spec
 from .exceptions import ValidationError
+from .validation import validate_string_list, validate_hypotheses_list
 from .constants import (
     # Input validation limits
     MAX_OBSERVATION_LENGTH,
@@ -369,8 +370,23 @@ def generate_hypotheses(
     Returns:
         List[Dict]: List of generated hypotheses with confidence scores and metadata
     """
+    # Validate complex parameter types
+    try:
+        validated_observations = validate_string_list(
+            observations, "observations", allow_empty=False, max_length=100
+        )
+    except ValidationError as e:
+        if reasoning_chain:
+            reasoning_chain.add_step(
+                stage="Abductive Reasoning: Hypothesis Generation",
+                description=f"Input validation failed: {str(e)}",
+                result=[],
+                confidence=0.0
+            )
+        raise
+
     # SECURITY: Apply input size validation BEFORE any processing to prevent DoS attacks
-    observations, context = _validate_and_sanitize_input_size(observations, context)
+    observations, context = _validate_and_sanitize_input_size(validated_observations, context)
 
     if not observations:
         if reasoning_chain:
@@ -688,7 +704,25 @@ def rank_hypotheses(
         >>> all(0.0 <= h["confidence"] <= 1.0 for h in result)
         True
     """
-    if not hypotheses:
+    # Validate complex parameter types
+    try:
+        validated_hypotheses = validate_hypotheses_list(
+            hypotheses, "hypotheses", max_hypotheses=50
+        )
+        validated_evidence = validate_string_list(
+            new_evidence, "new_evidence", allow_empty=True, max_length=50
+        )
+    except ValidationError as e:
+        if reasoning_chain:
+            reasoning_chain.add_step(
+                stage="Abductive Reasoning: Hypothesis Ranking",
+                description=f"Input validation failed: {str(e)}",
+                result=[],
+                confidence=0.0
+            )
+        raise
+
+    if not validated_hypotheses:
         if reasoning_chain:
             reasoning_chain.add_step(
                 stage="Abductive Reasoning: Hypothesis Ranking",
@@ -699,11 +733,11 @@ def rank_hypotheses(
         return []
 
     stage = "Abductive Reasoning: Hypothesis Ranking"
-    description = f"Updating {len(hypotheses)} hypotheses based on {len(new_evidence)} pieces of new evidence"
+    description = f"Updating {len(validated_hypotheses)} hypotheses based on {len(validated_evidence)} pieces of new evidence"
 
     updated_hypotheses = []
 
-    for index, hypothesis in enumerate(hypotheses):
+    for index, hypothesis in enumerate(validated_hypotheses):
         # Create a copy to avoid modifying original
         updated_hypothesis = hypothesis.copy()
 
@@ -714,7 +748,7 @@ def rank_hypotheses(
         evidence_support = 0.0
         total_evidence_score = 0.0
 
-        for evidence in new_evidence:
+        for evidence in validated_evidence:
             # Simple evidence matching based on keyword overlap
             evidence_keywords = set(_extract_keywords(evidence))
             hypothesis_keywords = set(_extract_keywords(hypothesis["hypothesis"]))
@@ -789,7 +823,22 @@ def evaluate_best_explanation(
     Returns:
         Optional[Dict]: The best explanation or None if no hypotheses provided
     """
-    if not hypotheses:
+    # Validate complex parameter types
+    try:
+        validated_hypotheses = validate_hypotheses_list(
+            hypotheses, "hypotheses", max_hypotheses=50
+        )
+    except ValidationError as e:
+        if reasoning_chain:
+            reasoning_chain.add_step(
+                stage="Abductive Reasoning: Best Explanation Selection",
+                description=f"Input validation failed: {str(e)}",
+                result=None,
+                confidence=0.0
+            )
+        raise
+
+    if not validated_hypotheses:
         if reasoning_chain:
             reasoning_chain.add_step(
                 stage="Abductive Reasoning: Best Explanation Selection",
@@ -800,14 +849,14 @@ def evaluate_best_explanation(
         return None
 
     stage = "Abductive Reasoning: Best Explanation Selection"
-    description = f"Evaluating {len(hypotheses)} hypotheses to select best explanation"
+    description = f"Evaluating {len(validated_hypotheses)} hypotheses to select best explanation"
 
     # Select the hypothesis with highest confidence
-    best_hypothesis = max(hypotheses, key=lambda x: x["confidence"])
+    best_hypothesis = max(validated_hypotheses, key=lambda x: x["confidence"])
 
     # Add evaluation metadata
     best_hypothesis["evaluation"] = {
-        "total_hypotheses": len(hypotheses),
+        "total_hypotheses": len(validated_hypotheses),
         "rank": 1,
         "selected_as_best": True,
         "selection_reason": f"Highest confidence score ({best_hypothesis['confidence']:.3f})"
