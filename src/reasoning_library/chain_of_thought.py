@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 from .core import ReasoningChain, tool_spec
 from .exceptions import ValidationError
+from .null_handling import handle_optional_params
 from .constants import (
     MAX_CONVERSATIONS,
     BASE_CONFIDENCE_CHAIN_OF_THOUGHT,
@@ -136,14 +137,21 @@ def chain_of_thought_step(
     with _conversations_lock:
         chain = _get_or_create_conversation(conversation_id)
 
+        # Standardize optional parameters using null handling utilities
+        normalized_params = handle_optional_params(
+            assumptions=assumptions,
+            metadata=metadata,
+            evidence=evidence
+        )
+
         step = chain.add_step(
             stage = stage,
             description = description,
             result = result,
             confidence = confidence,
-            evidence = evidence,
-            assumptions = assumptions if assumptions is not None else [],
-            metadata = metadata if metadata is not None else {},
+            evidence = normalized_params.get('evidence'),
+            assumptions = normalized_params.get('assumptions', []),
+            metadata = normalized_params.get('metadata', {}),
         )
 
     return {

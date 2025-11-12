@@ -8,6 +8,7 @@ and the Modus Ponens rule, implemented using a functional programming style.
 from typing import Any, Callable, Optional, Tuple
 
 from .core import ReasoningChain, curry, tool_spec
+from .null_handling import init_optional_bool, normalize_none_return, with_null_safety
 from .exceptions import ValidationError
 
 # --- Base Logical Primitives (Pure Functions) ---
@@ -168,6 +169,7 @@ def check_modus_ponens_premises_with_confidence(p: bool, q: bool) -> Tuple[bool,
     confidence_factors=["premise_truth_value"],
 )
 @curry
+@with_null_safety(expected_return_type=Optional[bool])
 
 def apply_modus_ponens(
     p_is_true: bool,
@@ -186,7 +188,7 @@ def apply_modus_ponens(
     Returns:
         Optional[bool]: The conclusion (True) if deduced, otherwise None.
     """
-    conclusion = None
+    conclusion = init_optional_bool()
     description = (
         f"Attempting Modus Ponens with P={p_is_true} and "
         f"(P -> Q)={p_implies_q_is_true}."

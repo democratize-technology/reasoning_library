@@ -11,6 +11,7 @@ from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from .exceptions import ValidationError
+from .null_handling import handle_optional_params
 from .constants import (
     # Security constants
     MAX_SOURCE_CODE_SIZE,
@@ -825,15 +826,23 @@ class ReasoningChain:
         Adds a new reasoning step to the chain.
         """
         self._step_counter += 1
+
+        # Standardize optional parameters using null handling utilities
+        normalized_params = handle_optional_params(
+            assumptions=assumptions,
+            metadata=metadata,
+            evidence=evidence
+        )
+
         step = ReasoningStep(
             step_number = self._step_counter,
             stage = stage,
             description = description,
             result = result,
             confidence = confidence,
-            evidence = evidence,
-            assumptions = assumptions if assumptions is not None else [],
-            metadata = metadata if metadata is not None else {},
+            evidence = normalized_params.get('evidence'),
+            assumptions = normalized_params.get('assumptions', []),
+            metadata = normalized_params.get('metadata', {}),
         )
         self.steps.append(step)
         return step
