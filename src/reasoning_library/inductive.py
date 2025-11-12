@@ -13,18 +13,66 @@ import numpy.typing as npt
 
 from .core import ReasoningChain, curry, tool_spec
 from .exceptions import ValidationError, ComputationError, PatternDetectionError, TimeoutError
+from .constants import (
+    # Performance optimization constants
+    LARGE_SEQUENCE_THRESHOLD,
+    EARLY_EXIT_TOLERANCE,
 
-# Performance optimization constants
-_LARGE_SEQUENCE_THRESHOLD = 100
-    # Switch to optimized algorithms for sequences larger than this
-_EARLY_EXIT_TOLERANCE = 1e-12    # For detecting perfect patterns early
+    # DoS Protection Constants
+    MAX_SEQUENCE_LENGTH,
+    COMPUTATION_TIMEOUT,
+    MAX_MEMORY_ELEMENTS,
+    VALUE_MAGNITUDE_LIMIT,
 
-# CRITICAL #7: DoS Protection Constants
-_MAX_SEQUENCE_LENGTH = 10000     # Maximum allowed sequence length to prevent DoS
-_COMPUTATION_TIMEOUT = 5.0       # Maximum computation time in seconds
-_MAX_MEMORY_ELEMENTS = 5000      # Maximum elements for memory - intensive operations
-_VALUE_MAGNITUDE_LIMIT = 1e15
-        # Maximum allowed value magnitude to prevent overflow (adjusted for legitimate sequences)
+    # Confidence calculation parameters
+    BASE_CONFIDENCE_ARITHMETIC,
+    BASE_CONFIDENCE_GEOMETRIC,
+    BASE_CONFIDENCE_RECURSIVE,
+    BASE_CONFIDENCE_POLYNOMIAL,
+    BASE_CONFIDENCE_PATTERN_DESCRIPTION,
+
+    # Complexity score factors
+    COMPLEXITY_SCORE_ARITHMETIC,
+    COMPLEXITY_SCORE_GEOMETRIC,
+    COMPLEXITY_SCORE_RECURSIVE,
+    COMPLEXITY_SCORE_POLYNOMIAL_DEGREE_FACTOR,
+
+    # Pattern detection tolerances
+    RELATIVE_TOLERANCE_DEFAULT,
+    ABSOLUTE_TOLERANCE_DEFAULT,
+    ABSOLUTE_TOLERANCE_PATTERN,
+    NUMERICAL_STABILITY_THRESHOLD,
+
+    # Data sufficiency thresholds
+    DATA_SUFFICIENCY_MINIMUM_ARITHMETIC,
+    DATA_SUFFICIENCY_MINIMUM_GEOMETRIC,
+    DATA_SUFFICIENCY_MINIMUM_DEFAULT,
+    DATA_SUFFICIENCY_MINIMUM_RECURSIVE,
+    DATA_SUFFICIENCY_MINIMUM_FIBONACCI,
+    DATA_SUFFICIENCY_MINIMUM_LUCAS,
+    DATA_SUFFICIENCY_MINIMUM_TRIBONACCI,
+    DATA_SUFFICIENCY_MINIMUM_POLYNOMIAL,
+
+    # Pattern quality factors
+    PATTERN_QUALITY_MINIMAL_DATA,
+    PATTERN_QUALITY_GEOMETRIC_MINIMUM,
+    PATTERN_QUALITY_DEFAULT_UNKNOWN,
+
+    # Statistical calculation parameters
+    COEFFICIENT_OF_VARIATION_DECAY_FACTOR,
+
+    # Timeout and checkpoint parameters
+    TIMEOUT_CHECK_INTERVAL,
+
+    # Confidence boundaries
+    CONFIDENCE_MIN,
+    CONFIDENCE_MAX,
+
+    # Polynomial fitting parameters
+    MAX_POLYNOMIAL_DEGREE_DEFAULT,
+    POLYNOMIAL_R_SQUARED_THRESHOLD,
+    POLYNOMIAL_COEFFICIENT_TOLERANCE,
+)
 
 
 def _validate_sequence_input(sequence: List[float], function_name: str) -> None:
@@ -38,10 +86,10 @@ def _validate_sequence_input(sequence: List[float], function_name: str) -> None:
     Raises:
         ValidationError: If sequence fails security validation
     """
-    if len(sequence) > _MAX_SEQUENCE_LENGTH:
+    if len(sequence) > MAX_SEQUENCE_LENGTH:
         raise ValidationError(
             f"{function_name}: Input sequence too large ({len(sequence)} elements). "
-            f"Maximum allowed: {_MAX_SEQUENCE_LENGTH} elements. "
+            f"Maximum allowed: {MAX_SEQUENCE_LENGTH} elements. "
             "This restriction prevents DoS attacks."
         )
 
@@ -53,10 +101,10 @@ def _validate_sequence_input(sequence: List[float], function_name: str) -> None:
                 "Only finite numbers are allowed."
             )
 
-        if abs(value) > _VALUE_MAGNITUDE_LIMIT:
+        if abs(value) > VALUE_MAGNITUDE_LIMIT:
             raise ValidationError(
                 f"{function_name}: Value magnitude too large at position {i}: {value}. "
-                f"Maximum allowed magnitude: {_VALUE_MAGNITUDE_LIMIT}. "
+                f"Maximum allowed magnitude: {VALUE_MAGNITUDE_LIMIT}. "
                 "This prevents overflow and performance issues."
             )
 
@@ -73,10 +121,10 @@ def _create_computation_timeout(start_time: float, function_name: str) -> None:
         TimeoutError: If computation has exceeded timeout
     """
     elapsed = time.time() - start_time
-    if elapsed > _COMPUTATION_TIMEOUT:
+    if elapsed > COMPUTATION_TIMEOUT:
         raise TimeoutError(
             f"{function_name}: Computation timeout after {elapsed:.2f} seconds. "
-            f"Maximum allowed: {_COMPUTATION_TIMEOUT} seconds. "
+            f"Maximum allowed: {COMPUTATION_TIMEOUT} seconds. "
             "This prevents DoS attacks."
         )
 
@@ -93,11 +141,11 @@ def _assess_data_sufficiency(sequence_length: int, pattern_type: str) -> float:
         float: Data sufficiency factor (0.0 - 1.0)
     """
     if pattern_type == "arithmetic":
-        minimum_required = 4
+        minimum_required = DATA_SUFFICIENCY_MINIMUM_ARITHMETIC
     elif pattern_type == "geometric":
-        minimum_required = 4
+        minimum_required = DATA_SUFFICIENCY_MINIMUM_GEOMETRIC
     else:
-        minimum_required = 3  # Default conservative minimum
+        minimum_required = DATA_SUFFICIENCY_MINIMUM_DEFAULT  # Default conservative minimum
 
     return min(1.0, sequence_length / minimum_required)
 
@@ -116,30 +164,30 @@ def _calculate_pattern_quality_score(
         float: Pattern quality factor (0.1 - 1.0)
     """
     if len(values) <= 1:
-        return 0.7  # Conservative for minimal data
+        return PATTERN_QUALITY_MINIMAL_DATA  # Conservative for minimal data
 
     values_array = np.array(values)
 
     if pattern_type == "arithmetic":
         # Use variance penalty for arithmetic progressions
         mean_abs_diff = np.mean(np.abs(values_array))
-        if mean_abs_diff < 1e-10:  # All differences are essentially zero
+        if mean_abs_diff < NUMERICAL_STABILITY_THRESHOLD:  # All differences are essentially zero
             return 1.0
         # Amplify variance penalty by using standard deviation relative to mean (coefficient of variation)
-        coefficient_of_variation = np.std(values_array) / (mean_abs_diff + 1e-10)
+        coefficient_of_variation = np.std(values_array) / (mean_abs_diff + NUMERICAL_STABILITY_THRESHOLD)
         # Use exponential decay to penalize noisy patterns more severely
-        return float(max(0.1, np.exp(-2.0 * coefficient_of_variation)))
+        return float(max(0.1, np.exp(-COEFFICIENT_OF_VARIATION_DECAY_FACTOR * coefficient_of_variation)))
 
     elif pattern_type == "geometric":
         # Use coefficient of variation for geometric progressions
         mean_ratio = np.mean(values_array)
-        if np.abs(mean_ratio) < 1e-10:  # Avoid division by zero
-            return 0.1
-        coefficient_of_variation = np.std(values_array) / (np.abs(mean_ratio) + 1e-10)
+        if np.abs(mean_ratio) < NUMERICAL_STABILITY_THRESHOLD:  # Avoid division by zero
+            return PATTERN_QUALITY_GEOMETRIC_MINIMUM
+        coefficient_of_variation = np.std(values_array) / (np.abs(mean_ratio) + NUMERICAL_STABILITY_THRESHOLD)
         # Use exponential decay to penalize noisy patterns, similar to arithmetic
-        return float(max(0.1, np.exp(-2.0 * coefficient_of_variation)))
+        return float(max(PATTERN_QUALITY_GEOMETRIC_MINIMUM, np.exp(-COEFFICIENT_OF_VARIATION_DECAY_FACTOR * coefficient_of_variation)))
 
-    return 0.5  # Default for unknown pattern types
+    return PATTERN_QUALITY_DEFAULT_UNKNOWN  # Default for unknown pattern types
 
 
 def _calculate_pattern_quality_score_optimized(
@@ -166,7 +214,7 @@ def _calculate_pattern_quality_score_optimized(
         float: Pattern quality factor (0.1 - 1.0)
     """
     if len(values) <= 1:
-        return 0.7  # Conservative for minimal data
+        return PATTERN_QUALITY_MINIMAL_DATA  # Conservative for minimal data
 
     # Convert to numpy array for consistent interface
     if not isinstance(values, np.ndarray):
@@ -179,11 +227,11 @@ def _calculate_pattern_quality_score_optimized(
     if len(values_array) >= 2:
         first_val = values_array[0]
         # Check if all values are nearly identical (perfect pattern)
-        if np.allclose(values_array, first_val, atol = _EARLY_EXIT_TOLERANCE):
+        if np.allclose(values_array, first_val, atol = EARLY_EXIT_TOLERANCE):
             return 1.0  # Perfect pattern, maximum confidence
 
     # For large sequences, use optimized streaming approach
-    if len(values_array) > _LARGE_SEQUENCE_THRESHOLD:
+    if len(values_array) > LARGE_SEQUENCE_THRESHOLD:
         return _calculate_pattern_quality_streaming(values_array, pattern_type)
 
     # For smaller sequences, use the original algorithm (already optimized)
@@ -257,29 +305,29 @@ def _calculate_pattern_quality_score_original(
     if pattern_type == "arithmetic":
         # Use variance penalty for arithmetic progressions
         mean_abs_diff = np.mean(np.abs(values_array))
-        if mean_abs_diff < 1e-10:  # All differences are essentially zero
+        if mean_abs_diff < NUMERICAL_STABILITY_THRESHOLD:  # All differences are essentially zero
             return 1.0
         # Amplify variance penalty by using standard deviation relative to mean (coefficient of variation)
-        coefficient_of_variation = np.std(values_array) / (mean_abs_diff + 1e-10)
+        coefficient_of_variation = np.std(values_array) / (mean_abs_diff + NUMERICAL_STABILITY_THRESHOLD)
         # Use exponential decay to penalize noisy patterns more severely
-        return float(max(0.1, np.exp(-2.0 * coefficient_of_variation)))
+        return float(max(0.1, np.exp(-COEFFICIENT_OF_VARIATION_DECAY_FACTOR * coefficient_of_variation)))
 
     elif pattern_type == "geometric":
         # Use coefficient of variation for geometric progressions
         mean_ratio = np.mean(values_array)
-        if np.abs(mean_ratio) < 1e-10:  # Avoid division by zero
-            return 0.1
-        coefficient_of_variation = np.std(values_array) / (np.abs(mean_ratio) + 1e-10)
+        if np.abs(mean_ratio) < NUMERICAL_STABILITY_THRESHOLD:  # Avoid division by zero
+            return PATTERN_QUALITY_GEOMETRIC_MINIMUM
+        coefficient_of_variation = np.std(values_array) / (np.abs(mean_ratio) + NUMERICAL_STABILITY_THRESHOLD)
         # Use exponential decay to penalize noisy patterns, similar to arithmetic
-        return float(max(0.1, np.exp(-2.0 * coefficient_of_variation)))
+        return float(max(PATTERN_QUALITY_GEOMETRIC_MINIMUM, np.exp(-COEFFICIENT_OF_VARIATION_DECAY_FACTOR * coefficient_of_variation)))
 
-    return 0.5  # Default for unknown pattern types
+    return PATTERN_QUALITY_DEFAULT_UNKNOWN  # Default for unknown pattern types
 
 
 def _calculate_arithmetic_confidence(
     differences: np.ndarray,
     sequence_length: int,
-    base_confidence: float = 0.95,
+    base_confidence: float = BASE_CONFIDENCE_ARITHMETIC,
 ) -> float:
     """
     Calculate confidence for arithmetic progression detection.
@@ -300,7 +348,7 @@ def _calculate_arithmetic_confidence(
                                                                         "arithmetic")
 
     # Complexity factor (arithmetic is simplest pattern)
-    complexity_factor = 1.0 / (1.0 + 0.0)  # complexity_score = 0 for arithmetic
+    complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_ARITHMETIC)  # complexity_score = 0 for arithmetic
 
     # Calculate final confidence
     confidence = (
@@ -310,11 +358,11 @@ def _calculate_arithmetic_confidence(
         * complexity_factor
     )
 
-    return min(1.0, max(0.0, confidence))
+    return min(CONFIDENCE_MAX, max(CONFIDENCE_MIN, confidence))
 
 
 def _calculate_geometric_confidence(
-    ratios: List[float], sequence_length: int, base_confidence: float = 0.95
+    ratios: List[float], sequence_length: int, base_confidence: float = BASE_CONFIDENCE_GEOMETRIC
 ) -> float:
     """
     Calculate confidence for geometric progression detection.
@@ -335,7 +383,7 @@ def _calculate_geometric_confidence(
                                                                         "geometric")
 
     # Complexity factor (geometric is slightly more complex than arithmetic)
-    complexity_factor = 1.0 / (1.0 + 0.1)  # complexity_score = 0.1 for geometric
+    complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_GEOMETRIC)  # complexity_score = 0.1 for geometric
 
     # Calculate final confidence
     confidence = (
@@ -345,7 +393,7 @@ def _calculate_geometric_confidence(
         * complexity_factor
     )
 
-    return min(1.0, max(0.0, confidence))
+    return min(CONFIDENCE_MAX, max(CONFIDENCE_MIN, confidence))
 
 
 @tool_spec(
@@ -359,8 +407,8 @@ def predict_next_in_sequence(
     sequence: List[float],
     reasoning_chain: Optional[ReasoningChain],
     *,
-    rtol: float = 0.2,
-    atol: float = 1e-8,
+    rtol: float = RELATIVE_TOLERANCE_DEFAULT,
+    atol: float = ABSOLUTE_TOLERANCE_DEFAULT,
 ) -> Optional[float]:
     """
     Attempts to predict the next number in a sequence based on simple arithmetic
@@ -466,8 +514,8 @@ def find_pattern_description(
     sequence: List[float],
     reasoning_chain: Optional[ReasoningChain],
     *,
-    rtol: float = 0.2,
-    atol: float = 1e-8,
+    rtol: float = RELATIVE_TOLERANCE_DEFAULT,
+    atol: float = ABSOLUTE_TOLERANCE_DEFAULT,
 ) -> str:
     """
     Describes the pattern found in a numerical sequence.
@@ -512,7 +560,7 @@ def find_pattern_description(
         result_str = f"Arithmetic progression with common difference: {diffs[0]}"
         # Use higher base confidence for pattern description than prediction
         confidence = _calculate_arithmetic_confidence(
-            diffs, len(sequence), base_confidence = 0.9
+            diffs, len(sequence), base_confidence = BASE_CONFIDENCE_PATTERN_DESCRIPTION
         )
         evidence = (
             f"Common difference {diffs[0]} found in {diffs}. "
@@ -538,7 +586,7 @@ def find_pattern_description(
             result_str = f"Geometric progression with common ratio: {ratios[0]}"
             # Use higher base confidence for pattern description than prediction
             confidence = _calculate_geometric_confidence(
-                ratios, len(sequence), base_confidence = 0.9
+                ratios, len(sequence), base_confidence = BASE_CONFIDENCE_PATTERN_DESCRIPTION
             )
             evidence = (
                 f"Common ratio {ratios[0]} found in {ratios}. "
@@ -570,7 +618,7 @@ def find_pattern_description(
 def _calculate_recursive_confidence(
     sequence_length: int,
     match_score: float,
-    base_confidence: float = 0.9,
+    base_confidence: float = BASE_CONFIDENCE_RECURSIVE,
 ) -> float:
     """
     Calculate confidence for recursive pattern detection.
@@ -584,14 +632,14 @@ def _calculate_recursive_confidence(
         float: Adjusted confidence score (0.0 - 1.0)
     """
     # Data sufficiency factor - recursive patterns need more data
-    minimum_required = 5  # Need at least 5 terms for reliable recursive detection
+    minimum_required = DATA_SUFFICIENCY_MINIMUM_RECURSIVE  # Need at least 5 terms for reliable recursive detection
     data_sufficiency_factor = min(1.0, sequence_length / minimum_required)
 
     # Pattern quality factor - how perfect the match is
     pattern_quality_factor = match_score
 
     # Complexity factor - recursive is more complex than arithmetic
-    complexity_factor = 1.0 / (1.0 + 0.3)  # complexity_score = 0.3 for recursive
+    complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_RECURSIVE)  # complexity_score = 0.3 for recursive
 
     # Calculate final confidence
     confidence = (
@@ -601,14 +649,14 @@ def _calculate_recursive_confidence(
         * complexity_factor
     )
 
-    return min(1.0, max(0.0, confidence))
+    return min(CONFIDENCE_MAX, max(CONFIDENCE_MIN, confidence))
 
 
 def _calculate_polynomial_confidence(
     sequence_length: int,
     r_squared: float,
     degree: int,
-    base_confidence: float = 0.85,
+    base_confidence: float = BASE_CONFIDENCE_POLYNOMIAL,
 ) -> float:
     """
     Calculate confidence for polynomial pattern detection.
@@ -623,14 +671,14 @@ def _calculate_polynomial_confidence(
         float: Adjusted confidence score (0.0 - 1.0)
     """
     # Data sufficiency factor
-    minimum_required = degree + 3  # Need at least degree + 3 points for reliable fit
+    minimum_required = degree + DATA_SUFFICIENCY_MINIMUM_POLYNOMIAL  # Need at least degree + 3 points for reliable fit
     data_sufficiency_factor = min(1.0, sequence_length / minimum_required)
 
     # Pattern quality factor - based on R - squared
     pattern_quality_factor = r_squared
 
     # Complexity factor - higher degree polynomials are more complex
-    complexity_factor = 1.0 / (1.0 + 0.1 * degree)
+    complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_POLYNOMIAL_DEGREE_FACTOR * degree)
 
     # Calculate final confidence
     confidence = (
@@ -640,11 +688,11 @@ def _calculate_polynomial_confidence(
         * complexity_factor
     )
 
-    return min(1.0, max(0.0, confidence))
+    return min(CONFIDENCE_MAX, max(CONFIDENCE_MIN, confidence))
 
 
 def detect_fibonacci_pattern(sequence: List[float],
-                             tolerance: float = 1e-10) -> Optional[Dict[str, Any]]:
+                             tolerance: float = ABSOLUTE_TOLERANCE_PATTERN) -> Optional[Dict[str, Any]]:
     """
     Detect Fibonacci - like recursive patterns in a sequence.
 
@@ -715,7 +763,7 @@ def detect_fibonacci_pattern(sequence: List[float],
 
 
 def detect_lucas_pattern(sequence: List[float],
-                         tolerance: float = 1e-10) -> Optional[Dict[str, Any]]:
+                         tolerance: float = ABSOLUTE_TOLERANCE_PATTERN) -> Optional[Dict[str, Any]]:
     """
     Detect Lucas sequence pattern (Fibonacci variant with different seeds).
 
@@ -793,7 +841,7 @@ def detect_lucas_pattern(sequence: List[float],
 
 
 def detect_tribonacci_pattern(sequence: List[float],
-                              tolerance: float = 1e-10) -> Optional[Dict[str, Any]]:
+                              tolerance: float = ABSOLUTE_TOLERANCE_PATTERN) -> Optional[Dict[str, Any]]:
     """
     Detect Tribonacci sequence pattern (sum of previous 3 terms).
 

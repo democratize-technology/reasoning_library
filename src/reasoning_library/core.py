@@ -11,14 +11,35 @@ from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from .exceptions import CacheError, ValidationError, ComputationError
+from .constants import (
+    # Security constants
+    MAX_SOURCE_CODE_SIZE,
 
-# Security constants and compiled patterns
-MAX_SOURCE_CODE_SIZE = 10000  # Prevent ReDoS attacks by limiting input size
+    # Performance optimization constants
+    MAX_CACHE_SIZE,
+    MAX_REGISTRY_SIZE,
+
+    # Cache management parameters
+    CACHE_EVICTION_FRACTION,
+    REGISTRY_EVICTION_FRACTION,
+
+    # Regex pattern constants
+    REGEX_WORD_CHAR_MAX,
+    REGEX_SPACING_MAX,
+
+    # Text processing limits
+    KEYWORD_LENGTH_LIMIT,
+    COMPONENT_LENGTH_LIMIT,
+    ISSUE_LENGTH_LIMIT,
+
+    # Confidence calculation parameters
+    BASE_CONFIDENCE_CHAIN_OF_THOUGHT,
+)
 
 # Pre - compiled regex patterns with ReDoS vulnerability fixes
 # Using more specific patterns to avoid catastrophic backtracking
 FACTOR_PATTERN = re.compile(
-    r"(\w{0,30}(?:data_sufficiency | pattern_quality | complexity)_factor)[\s]{0,5}(?:\*|,|\+|\-|=)",
+    rf"(\w{{0,{REGEX_WORD_CHAR_MAX}}}(?:data_sufficiency | pattern_quality | complexity)_factor)[\s]{{0,5}}(?:\*|,|\+|\-|=)",
     re.IGNORECASE | re.MULTILINE,
 )
 COMMENT_PATTERN = re.compile(
@@ -29,7 +50,7 @@ EVIDENCE_PATTERN = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 COMBINATION_PATTERN = re.compile(
-    r"(\w{1,30}_factor)[\s]{0,10}\*[\s]{0,10}(\w{1,30}_factor)",
+    rf"(\w{{1,{REGEX_WORD_CHAR_MAX}}}_factor)[\s]{{0,{REGEX_SPACING_MAX}}}\*[\s]{{0,{REGEX_SPACING_MAX}}}(\w{{1,{REGEX_WORD_CHAR_MAX}}}_factor)",
     re.IGNORECASE | re.MULTILINE,
 )
 CLEAN_FACTOR_PATTERN = re.compile(r"[()=\*]+", re.IGNORECASE)
@@ -42,13 +63,8 @@ _function_source_cache: weakref.WeakKeyDictionary[Callable, str] = weakref.WeakK
 # Mathematical reasoning detection cache using function id for key stability
 _math_detection_cache: Dict[int, Tuple[bool, Optional[str], Optional[str]]] = {}
 
-# Cache size limit to prevent unbounded growth
-_MAX_CACHE_SIZE = 1000
-
-# Registry size limits to prevent memory exhaustion attacks
-# Based on: ~100 bytes per registry entry * 500 entries = ~50KB memory usage
-# This limit prevents DoS while maintaining reasonable tool capacity
-_MAX_REGISTRY_SIZE = 500
+# Cache size limit and registry limits are now imported from constants module
+# _MAX_CACHE_SIZE and _MAX_REGISTRY_SIZE are replaced by MAX_CACHE_SIZE and MAX_REGISTRY_SIZE
 
 # Thread - safe locks for registry operations
 _registry_lock = threading.RLock()
@@ -154,10 +170,10 @@ def _get_math_detection_cached(func: Callable[...,
             return _math_detection_cache[func_id]
 
         # Implement atomic cache size management and eviction
-        if len(_math_detection_cache) >= _MAX_CACHE_SIZE:
+        if len(_math_detection_cache) >= MAX_CACHE_SIZE:
             # Remove oldest entries (simple FIFO approach)
             # In production, consider using functools.lru_cache or more sophisticated eviction
-            oldest_keys = list(_math_detection_cache.keys())[:_MAX_CACHE_SIZE // 4]
+            oldest_keys = list(_math_detection_cache.keys())[:int(MAX_CACHE_SIZE * CACHE_EVICTION_FRACTION)]
             for key in oldest_keys:
                 _math_detection_cache.pop(key, None)
 
@@ -181,19 +197,19 @@ def _manage_registry_size():
     """
     with _registry_lock:
         # Early exit if both registries are under limit (O(1) performance)
-        if (len(ENHANCED_TOOL_REGISTRY) < _MAX_REGISTRY_SIZE and
-            len(TOOL_REGISTRY) < _MAX_REGISTRY_SIZE):
+        if (len(ENHANCED_TOOL_REGISTRY) < MAX_REGISTRY_SIZE and
+            len(TOOL_REGISTRY) < MAX_REGISTRY_SIZE):
             return
 
         # Only if exceeding limit, then do expensive eviction operations
-        if len(ENHANCED_TOOL_REGISTRY) >= _MAX_REGISTRY_SIZE:
-            # Remove oldest 25% of entries (FIFO eviction)
-            remove_count = _MAX_REGISTRY_SIZE // 4
+        if len(ENHANCED_TOOL_REGISTRY) >= MAX_REGISTRY_SIZE:
+            # Remove oldest percentage of entries (FIFO eviction)
+            remove_count = int(MAX_REGISTRY_SIZE * REGISTRY_EVICTION_FRACTION)
             ENHANCED_TOOL_REGISTRY[:] = ENHANCED_TOOL_REGISTRY[remove_count:]
 
-        if len(TOOL_REGISTRY) >= _MAX_REGISTRY_SIZE:
-            # Remove oldest 25% of entries (FIFO eviction)
-            remove_count = _MAX_REGISTRY_SIZE // 4
+        if len(TOOL_REGISTRY) >= MAX_REGISTRY_SIZE:
+            # Remove oldest percentage of entries (FIFO eviction)
+            remove_count = int(MAX_REGISTRY_SIZE * REGISTRY_EVICTION_FRACTION)
             TOOL_REGISTRY[:] = TOOL_REGISTRY[remove_count:]
 
 
@@ -435,7 +451,7 @@ def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(tool_spec["function"], dict):
         raise ValidationError("Tool specification 'function' value must be a dictionary")
 
-    def sanitize_text_input(text: Any, max_length: int = 1000) -> str:
+    def sanitize_text_input(text: Any, max_length: int = KEYWORD_LENGTH_LIMIT * 20) -> str:
         """SECURE: Sanitize text inputs to prevent injection attacks."""
         if not isinstance(text, str):
             return ""
@@ -494,10 +510,10 @@ def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
                         # Sanitize all string values to prevent injection
                         if func_key == "name":
                             safe_function[func_key] = sanitize_text_input(func_value,
-                                                                          max_length = 50)
+                                                                          max_length = KEYWORD_LENGTH_LIMIT)
                         elif func_key == "description":
                             safe_function[func_key] = sanitize_text_input(func_value,
-                                                                          max_length = 500)
+                                                                          max_length = KEYWORD_LENGTH_LIMIT * 10)
                         elif func_key == "parameters" and isinstance(func_value, dict):
                             # Recursively sanitize parameter object
                             safe_function[func_key] = _sanitize_parameters(func_value)
@@ -505,7 +521,7 @@ def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
                             safe_function[func_key] = func_value
                 safe_spec[key] = safe_function
             else:
-                safe_spec[key] = sanitize_text_input(value, max_length = 100)
+                safe_spec[key] = sanitize_text_input(value, max_length = KEYWORD_LENGTH_LIMIT * 2)
 
     return safe_spec
 
@@ -522,7 +538,7 @@ def _sanitize_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
         safe_params["properties"] = {}
         for param_name, param_spec in parameters["properties"].items():
             # Sanitize parameter name
-            safe_name = re.sub(r'[^a - zA - Z0 - 9_]', '', str(param_name))[:50]
+            safe_name = re.sub(r'[^a - zA - Z0 - 9_]', '', str(param_name))[:KEYWORD_LENGTH_LIMIT]
             if not safe_name:
                 safe_name = "param"
 
@@ -532,7 +548,7 @@ def _sanitize_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
                 for spec_key, spec_value in param_spec.items():
                     if isinstance(spec_value, str):
                         safe_spec[spec_key] = re.sub(r'[<>"\'`{}]',
-                                                     '', spec_value)[:200]
+                                                     '', spec_value)[:COMPONENT_LENGTH_LIMIT * 4]
                     else:
                         safe_spec[spec_key] = spec_value
                 safe_params["properties"][safe_name] = safe_spec
@@ -541,9 +557,9 @@ def _sanitize_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
     for key, value in parameters.items():
         if key != "properties":
             if isinstance(value, str):
-                safe_params[key] = re.sub(r'[<>"\'`{}]', '', value)[:100]
+                safe_params[key] = re.sub(r'[<>"\'`{}]', '', value)[:COMPONENT_LENGTH_LIMIT * 2]
             elif isinstance(value, (list, tuple)):
-                safe_params[key] = [str(item)[:50] for item in value]
+                safe_params[key] = [str(item)[:KEYWORD_LENGTH_LIMIT] for item in value]
             else:
                 safe_params[key] = value
 
@@ -654,7 +670,7 @@ def _enhance_description_with_confidence_docs(
         safe_factors = [factor for factor in safe_factors if factor]
             # Remove empty strings
         if safe_factors:
-            enhanced_desc += f"\n\nConfidence Scoring: Confidence calculation based on: {', '.join(safe_factors[:5])}"
+            enhanced_desc += f"\n\nConfidence Scoring: Confidence calculation based on: {', '.join(safe_factors[:MAX_TEMPLATE_KEYWORDS])}"
     elif metadata.confidence_documentation:
         # Fallback to existing documentation if factors are not provided
         safe_doc = sanitize_confidence_text(metadata.confidence_documentation)

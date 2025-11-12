@@ -13,13 +13,53 @@ from collections import defaultdict
 
 from .core import ReasoningChain, curry, tool_spec
 from .exceptions import ValidationError
+from .constants import (
+    # Input validation limits
+    MAX_OBSERVATION_LENGTH,
+    MAX_CONTEXT_LENGTH,
+
+    # Confidence calculation parameters
+    BASE_CONFIDENCE_ABDUCTIVE,
+    BASE_CONFIDENCE_TEMPLATE_HYPOTHESIS,
+
+    # Simplicity and specificity factors
+    SIMPLICITY_ASSUMPTION_PENALTY,
+    SPECIFICITY_PREDICTIONS_MINIMUM,
+    EVIDENCE_SUPPORT_MULTIPLIER,
+
+    # Confidence boundaries
+    CONFIDENCE_MIN,
+    CONFIDENCE_MAX,
+
+    # Evidence support thresholds
+    EVIDENCE_SUPPORT_HIGH_THRESHOLD,
+    EVIDENCE_SUPPORT_MODERATE_THRESHOLD,
+
+    # Text processing limits
+    KEYWORD_EXTRACTION_OBSERVATION_LIMIT,
+    KEYWORD_EXTRACTION_CONTEXT_LIMIT,
+    DOMAIN_DETECTION_LIMIT,
+    KEYWORD_LENGTH_LIMIT,
+    COMPONENT_LENGTH_LIMIT,
+    ISSUE_LENGTH_LIMIT,
+    HYPOTHESIS_TEXT_HARD_LIMIT,
+
+    # Hypothesis generation parameters
+    MAX_HYPOTHESES_DEFAULT,
+    MAX_THEMES_RETURNED,
+    THEME_FREQUENCY_THRESHOLD,
+    MAX_TEMPLATE_KEYWORDS,
+
+    # Input validation constants
+    MIN_KEYWORD_LENGTH,
+)
 
 
 def _validate_and_sanitize_input_size(
     observations: List[str],
     context: Optional[str] = None,
-    max_observation_length: int = 10000,
-    max_context_length: int = 5000
+    max_observation_length: int = MAX_OBSERVATION_LENGTH,
+    max_context_length: int = MAX_CONTEXT_LENGTH
 ) -> tuple[List[str], Optional[str]]:
     """
     Validate and sanitize input sizes to prevent DoS attacks from large strings.
@@ -98,7 +138,7 @@ def _validate_confidence_value(confidence: Any, hypothesis_index: Optional[int] 
     try:
         normalized_confidence = float(confidence)
         # Clamp to valid range
-        normalized_confidence = max(0.0, min(1.0, normalized_confidence))
+        normalized_confidence = max(CONFIDENCE_MIN, min(CONFIDENCE_MAX, normalized_confidence))
         return normalized_confidence
     except (ValueError, OverflowError) as e:
         raise ValidationError(f"Confidence value '{confidence}' is invalid{hypothesis_ref}: {e}")
@@ -109,7 +149,7 @@ def _calculate_hypothesis_confidence(
     total_observations: int,
     explained_observations: int,
     assumption_count: int,
-    base_confidence: float = 0.7,
+    base_confidence: float = BASE_CONFIDENCE_ABDUCTIVE,
 ) -> float:
     """
     Calculate confidence score for a hypothesis.
@@ -128,21 +168,21 @@ def _calculate_hypothesis_confidence(
     # Coverage factor: how many observations are explained
     coverage_factor = (
         explained_observations / total_observations
-        if total_observations > 0 else 0.0
+        if total_observations > 0 else CONFIDENCE_MIN
     )
 
     # Simplicity factor: prefer hypotheses with fewer assumptions (Occam's razor)
-    simplicity_factor = 1.0 / (1.0 + 0.2 * assumption_count)
+    simplicity_factor = 1.0 / (1.0 + SIMPLICITY_ASSUMPTION_PENALTY * assumption_count)
 
     # Specificity factor: more specific hypotheses get higher confidence
-    specificity_factor = min(1.0, len(hypothesis.get("testable_predictions", [])) / 3.0)
+    specificity_factor = min(CONFIDENCE_MAX, len(hypothesis.get("testable_predictions", [])) / SPECIFICITY_PREDICTIONS_MINIMUM)
 
     # Calculate final confidence
     confidence = (
         base_confidence * coverage_factor * simplicity_factor * specificity_factor
     )
 
-    return min(1.0, max(0.0, confidence))
+    return min(CONFIDENCE_MAX, max(CONFIDENCE_MIN, confidence))
 
 
 def _extract_keywords(text: str) -> List[str]:
@@ -169,7 +209,7 @@ def _extract_keywords(text: str) -> List[str]:
     words = re.findall(r'[a-zA-Z0-9]+', text.lower())
 
     # Filter out common words and short words
-    keywords = [word for word in words if word not in common_words and len(word) > 2]
+    keywords = [word for word in words if word not in common_words and len(word) > MIN_KEYWORD_LENGTH]
 
     # Return unique keywords
     return list(set(keywords))
@@ -192,8 +232,8 @@ def _extract_keywords_with_context(
     # SECURITY: Apply input size validation BEFORE any processing to prevent DoS attacks
     observations, context = _validate_and_sanitize_input_size(
         observations, context,
-        max_observation_length=1000,  # Smaller limit for keyword extraction
-        max_context_length=500
+        max_observation_length=KEYWORD_EXTRACTION_OBSERVATION_LIMIT,  # Smaller limit for keyword extraction
+        max_context_length=KEYWORD_EXTRACTION_CONTEXT_LIMIT
     )
 
     # Combine all text with size limits already applied
@@ -293,12 +333,12 @@ def _find_common_themes(observations: List[str]) -> List[str]:
         keyword_freq[keyword] += 1
 
     # Return keywords that appear in multiple observations
-    common_themes = [kw for kw, freq in keyword_freq.items() if freq >= 2]
+    common_themes = [kw for kw, freq in keyword_freq.items() if freq >= THEME_FREQUENCY_THRESHOLD]
 
     # Sort by frequency
     common_themes.sort(key=lambda x: keyword_freq[x], reverse=True)
 
-    return common_themes[:10]  # Return top 10 themes
+    return common_themes[:MAX_THEMES_RETURNED]  # Return top N themes
 
 
 @tool_spec(
@@ -313,7 +353,7 @@ def generate_hypotheses(
     reasoning_chain: Optional[ReasoningChain],
     *,
     context: Optional[str] = None,
-    max_hypotheses: int = 5,
+    max_hypotheses: int = MAX_HYPOTHESES_DEFAULT,
 ) -> List[Dict[str, Any]]:
     """
     Generate plausible explanatory hypotheses from observations
@@ -423,8 +463,8 @@ def generate_hypotheses(
         domain = None
         all_text = " ".join(observations) + " " + context.lower()
         # Additional safeguard: ensure all_text doesn't get too large even with validated inputs
-        if len(all_text) > 50000:  # 50KB limit for domain detection
-            all_text = all_text[:50000]
+        if len(all_text) > DOMAIN_DETECTION_LIMIT:  # 50KB limit for domain detection
+            all_text = all_text[:DOMAIN_DETECTION_LIMIT]
 
         for domain_name, domain_info in DOMAIN_TEMPLATES.items():
             if any(keyword in all_text for keyword in domain_info["keywords"]):
@@ -455,9 +495,9 @@ def generate_hypotheses(
 
                 # SECURITY: Apply length limits IMMEDIATELY after keyword extraction
                 # This prevents DoS attacks from large strings that were extracted
-                action = action[:50].strip()
-                component = component[:50].strip()
-                issue = issue[:100].strip()
+                action = action[:KEYWORD_LENGTH_LIMIT].strip()
+                component = component[:COMPONENT_LENGTH_LIMIT].strip()
+                issue = issue[:ISSUE_LENGTH_LIMIT].strip()
 
                 # Validate inputs before template formatting
                 if not isinstance(action, str) or len(action.strip()) == 0:
@@ -501,7 +541,7 @@ def generate_hypotheses(
                 template_hyps.append({
                     "hypothesis": hypothesis_text,
                     "explains": list(range(len(observations))),
-                    "confidence": 0.6,
+                    "confidence": BASE_CONFIDENCE_TEMPLATE_HYPOTHESIS,
                     "assumptions": ["Context '{context}' is relevant to the issue"],
                     "testable_predictions": [
                         f"Reverting the {action} should reduce or resolve the {issue}",
@@ -523,9 +563,9 @@ def generate_hypotheses(
             if context_keywords:
                 # SECURITY: Apply length limits to keywords to prevent DoS in contextual hypotheses
                 safe_keywords = []
-                for keyword in context_keywords[:3]:
+                for keyword in context_keywords[:MAX_TEMPLATE_KEYWORDS]:
                     # Truncate each keyword to prevent long repetitive strings
-                    safe_keyword = keyword[:50].strip()
+                    safe_keyword = keyword[:KEYWORD_LENGTH_LIMIT].strip()
                     if safe_keyword:  # Only add non-empty keywords
                         safe_keywords.append(safe_keyword)
 
@@ -535,8 +575,8 @@ def generate_hypotheses(
                     keyword_list = ', '.join(safe_keywords)
                     # Limit total hypothesis length
                     hypothesis_text = f"The observations are related to the context: {keyword_list}"
-                    if len(hypothesis_text) > 500:  # Hard limit for contextual hypotheses
-                        hypothesis_text = hypothesis_text[:500].strip()
+                    if len(hypothesis_text) > HYPOTHESIS_TEXT_HARD_LIMIT:  # Hard limit for contextual hypotheses
+                        hypothesis_text = hypothesis_text[:HYPOTHESIS_TEXT_HARD_LIMIT].strip()
 
                 context_hypothesis = {
                     "hypothesis": hypothesis_text,
@@ -692,8 +732,8 @@ def rank_hypotheses(
         avg_evidence_support = evidence_support / total_evidence_score if total_evidence_score > 0 else 0.0
 
         # Update confidence based on evidence (now using validated confidence)
-        confidence_multiplier = 1.0 + (0.5 * avg_evidence_support)
-        updated_hypothesis["confidence"] = min(1.0, validated_confidence * confidence_multiplier)
+        confidence_multiplier = 1.0 + (EVIDENCE_SUPPORT_MULTIPLIER * avg_evidence_support)
+        updated_hypothesis["confidence"] = min(CONFIDENCE_MAX, validated_confidence * confidence_multiplier)
 
         # Add evidence to hypothesis
         if "supporting_evidence" not in updated_hypothesis:
@@ -701,9 +741,9 @@ def rank_hypotheses(
         updated_hypothesis["supporting_evidence"].extend(new_evidence)
 
         # Update hypothesis description if strong evidence
-        if avg_evidence_support > 0.7:
+        if avg_evidence_support > EVIDENCE_SUPPORT_HIGH_THRESHOLD:
             updated_hypothesis["hypothesis"] += " (strongly supported by new evidence)"
-        elif avg_evidence_support > 0.3:
+        elif avg_evidence_support > EVIDENCE_SUPPORT_MODERATE_THRESHOLD:
             updated_hypothesis["hypothesis"] += " (supported by new evidence)"
 
         updated_hypotheses.append(updated_hypothesis)

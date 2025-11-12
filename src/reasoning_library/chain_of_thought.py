@@ -13,11 +13,16 @@ from typing import Any, Dict, List, Optional
 
 from .core import ReasoningChain, tool_spec
 from .exceptions import ValidationError
+from .constants import (
+    MAX_CONVERSATIONS,
+    BASE_CONFIDENCE_CHAIN_OF_THOUGHT,
+    CONFIDENCE_MIN,
+    CONFIDENCE_MAX,
+)
 
 # Thread - safe conversation management with bounded storage
 _conversations: OrderedDict[str, ReasoningChain] = OrderedDict()
 _conversations_lock = threading.RLock()
-_MAX_CONVERSATIONS = 1000  # Configurable limit to prevent memory DoS
 
 
 def _validate_conversation_id(conversation_id: str) -> str:
@@ -48,7 +53,7 @@ def _evict_oldest_conversations_if_needed() -> None:
     Evict oldest conversations if we exceed the maximum limit.
     Must be called within _conversations_lock context.
     """
-    while len(_conversations) >= _MAX_CONVERSATIONS:
+    while len(_conversations) >= MAX_CONVERSATIONS:
         # Remove the oldest conversation (FIFO / LRU)
         _conversations.popitem(last = False)
 
@@ -122,10 +127,10 @@ def chain_of_thought_step(
         }
 
     if confidence is None:
-        confidence = 0.8  # Conservative default for chain - of - thought steps
+        confidence = BASE_CONFIDENCE_CHAIN_OF_THOUGHT  # Conservative default for chain - of - thought steps
 
     # Ensure confidence is within valid range
-    confidence = max(0.0, min(1.0, confidence))
+    confidence = max(CONFIDENCE_MIN, min(CONFIDENCE_MAX, confidence))
 
     # Fix race condition: move conversation creation inside lock context
     with _conversations_lock:
@@ -198,7 +203,7 @@ def get_chain_summary(conversation_id: str) -> Dict[str, Any]:
             if confidences:
                 overall_confidence = min(confidences)  # Conservative approach
             else:
-                overall_confidence = 0.8  # Default if no confidences specified
+                overall_confidence = BASE_CONFIDENCE_CHAIN_OF_THOUGHT  # Default if no confidences specified
         else:
             overall_confidence = 0.0  # No steps means no confidence
 
