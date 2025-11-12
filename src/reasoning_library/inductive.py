@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Union
 import numpy as np
 import numpy.typing as npt
 
-from .core import ReasoningChain, ReasoningStep, curry, tool_spec
+from .core import ReasoningChain, curry, tool_spec
 
 # Performance optimization constants
 _LARGE_SEQUENCE_THRESHOLD = 100  # Switch to optimized algorithms for sequences larger than this
@@ -20,7 +20,7 @@ _EARLY_EXIT_TOLERANCE = 1e-12    # For detecting perfect patterns early
 # CRITICAL #7: DoS Protection Constants
 _MAX_SEQUENCE_LENGTH = 10000     # Maximum allowed sequence length to prevent DoS
 _COMPUTATION_TIMEOUT = 5.0       # Maximum computation time in seconds
-_MAX_MEMORY_ELEMENTS = 5000      # Maximum elements for memory-intensive operations
+_MAX_MEMORY_ELEMENTS = 5000      # Maximum elements for memory - intensive operations
 _VALUE_MAGNITUDE_LIMIT = 1e15    # Maximum allowed value magnitude to prevent overflow (adjusted for legitimate sequences)
 
 
@@ -87,7 +87,7 @@ def _assess_data_sufficiency(sequence_length: int, pattern_type: str) -> float:
         pattern_type (str): Type of pattern ('arithmetic' or 'geometric')
 
     Returns:
-        float: Data sufficiency factor (0.0-1.0)
+        float: Data sufficiency factor (0.0 - 1.0)
     """
     if pattern_type == "arithmetic":
         minimum_required = 4
@@ -110,7 +110,7 @@ def _calculate_pattern_quality_score(
         pattern_type (str): Type of pattern ('arithmetic' or 'geometric')
 
     Returns:
-        float: Pattern quality factor (0.1-1.0)
+        float: Pattern quality factor (0.1 - 1.0)
     """
     if len(values) <= 1:
         return 0.7  # Conservative for minimal data
@@ -146,7 +146,7 @@ def _calculate_pattern_quality_score_optimized(
     """
     Optimized pattern quality calculation with early exit and streaming computation.
 
-    SAMURAI-level optimization that provides significant performance improvement
+    SAMURAI - level optimization that provides significant performance improvement
     for large sequences while maintaining identical mathematical accuracy.
 
     Performance improvements:
@@ -160,7 +160,7 @@ def _calculate_pattern_quality_score_optimized(
         pattern_type (str): Type of pattern ('arithmetic' or 'geometric')
 
     Returns:
-        float: Pattern quality factor (0.1-1.0)
+        float: Pattern quality factor (0.1 - 1.0)
     """
     if len(values) <= 1:
         return 0.7  # Conservative for minimal data
@@ -176,7 +176,7 @@ def _calculate_pattern_quality_score_optimized(
     if len(values_array) >= 2:
         first_val = values_array[0]
         # Check if all values are nearly identical (perfect pattern)
-        if np.allclose(values_array, first_val, atol=_EARLY_EXIT_TOLERANCE):
+        if np.allclose(values_array, first_val, atol = _EARLY_EXIT_TOLERANCE):
             return 1.0  # Perfect pattern, maximum confidence
 
     # For large sequences, use optimized streaming approach
@@ -202,7 +202,7 @@ def _calculate_pattern_quality_streaming(
         pattern_type: Type of pattern ('arithmetic' or 'geometric')
 
     Returns:
-        float: Pattern quality factor (0.1-1.0)
+        float: Pattern quality factor (0.1 - 1.0)
     """
     n = len(values_array)
 
@@ -249,7 +249,7 @@ def _calculate_pattern_quality_score_original(
         pattern_type: Type of pattern ('arithmetic' or 'geometric')
 
     Returns:
-        float: Pattern quality factor (0.1-1.0)
+        float: Pattern quality factor (0.1 - 1.0)
     """
     if pattern_type == "arithmetic":
         # Use variance penalty for arithmetic progressions
@@ -287,13 +287,14 @@ def _calculate_arithmetic_confidence(
         base_confidence (float): Base confidence level before adjustments
 
     Returns:
-        float: Adjusted confidence score (0.0-1.0)
+        float: Adjusted confidence score (0.0 - 1.0)
     """
     # Data sufficiency factor
     data_sufficiency_factor = _assess_data_sufficiency(sequence_length, "arithmetic")
 
     # Pattern quality factor (using optimized calculation)
-    pattern_quality_factor = _calculate_pattern_quality_score_optimized(differences, "arithmetic")
+    pattern_quality_factor = _calculate_pattern_quality_score_optimized(differences,
+                                                                        "arithmetic")
 
     # Complexity factor (arithmetic is simplest pattern)
     complexity_factor = 1.0 / (1.0 + 0.0)  # complexity_score = 0 for arithmetic
@@ -321,13 +322,14 @@ def _calculate_geometric_confidence(
         base_confidence (float): Base confidence level before adjustments
 
     Returns:
-        float: Adjusted confidence score (0.0-1.0)
+        float: Adjusted confidence score (0.0 - 1.0)
     """
     # Data sufficiency factor
     data_sufficiency_factor = _assess_data_sufficiency(sequence_length, "geometric")
 
     # Pattern quality factor (using optimized calculation)
-    pattern_quality_factor = _calculate_pattern_quality_score_optimized(ratios, "geometric")
+    pattern_quality_factor = _calculate_pattern_quality_score_optimized(ratios,
+                                                                        "geometric")
 
     # Complexity factor (geometric is slightly more complex than arithmetic)
     complexity_factor = 1.0 / (1.0 + 0.1)  # complexity_score = 0.1 for geometric
@@ -349,6 +351,7 @@ def _calculate_geometric_confidence(
     confidence_formula="base * data_sufficiency_factor * pattern_quality_factor * complexity_factor",
 )
 @curry
+
 def predict_next_in_sequence(
     sequence: List[float],
     reasoning_chain: Optional[ReasoningChain],
@@ -367,7 +370,8 @@ def predict_next_in_sequence(
         atol (float): Absolute tolerance for pattern detection (default: 1e-8).
 
     Returns:
-        Optional[float]: The predicted next number as a float, or None if no simple pattern is found.
+        Optional[float]: The predicted next number as a float, or
+            None if no simple pattern is found.
 
     Raises:
         TypeError: If sequence is not a list, tuple, or numpy array.
@@ -376,7 +380,7 @@ def predict_next_in_sequence(
     # Input validation
     if not isinstance(sequence, (list, tuple, np.ndarray)):
         raise TypeError(
-            f"Expected list/tuple/array for sequence, got {type(sequence).__name__}"
+            f"Expected list / tuple / array for sequence, got {type(sequence).__name__}"
         )
     if len(sequence) == 0:
         raise ValueError("Sequence cannot be empty")
@@ -391,25 +395,28 @@ def predict_next_in_sequence(
         description = f"Sequence {sequence} too short to determine a pattern."
         if reasoning_chain:
             reasoning_chain.add_step(
-                stage=stage, description=description, result=None, confidence=0.0
+                stage = stage, description = description, result = None, confidence = 0.0
             )
         return None
 
     # Check for arithmetic progression
     diffs = np.diff(sequence)
-    if len(diffs) > 0 and np.allclose(diffs, diffs[0], rtol=rtol, atol=atol):
+    if len(diffs) > 0 and np.allclose(diffs, diffs[0], rtol = rtol, atol = atol):
         result = float(sequence[-1] + diffs[0])
         confidence = _calculate_arithmetic_confidence(diffs, len(sequence))
         description = f"Identified arithmetic progression with common difference: {diffs[0]}. Predicted next: {result}"
-        evidence = f"Common difference {diffs[0]} found in {diffs}. Confidence based on pattern quality and data sufficiency."
+        evidence = (
+            f"Common difference {diffs[0]} found in {diffs}. "
+            "Confidence based on pattern quality and data sufficiency."
+        )
         if reasoning_chain:
             reasoning_chain.add_step(
-                stage=stage,
-                description=description,
-                result=result,
-                confidence=confidence,
-                evidence=evidence,
-                assumptions=assumptions,
+                stage = stage,
+                description = description,
+                result = result,
+                confidence = confidence,
+                evidence = evidence,
+                assumptions = assumptions,
             )
         return result
 
@@ -418,19 +425,22 @@ def predict_next_in_sequence(
         ratios_list = [sequence[i] / sequence[i - 1] for i in range(1, len(sequence))]
         # Add bounds checking to prevent extreme values
         ratios = list(np.clip(ratios_list, -1e6, 1e6))
-        if len(ratios) > 0 and np.allclose(ratios, ratios[0], rtol=rtol, atol=atol):
+        if len(ratios) > 0 and np.allclose(ratios, ratios[0], rtol = rtol, atol = atol):
             result = float(sequence[-1] * ratios[0])
             confidence = _calculate_geometric_confidence(ratios, len(sequence))
             description = f"Identified geometric progression with common ratio: {ratios[0]}. Predicted next: {result}"
-            evidence = f"Common ratio {ratios[0]} found in {ratios}. Confidence based on pattern quality and data sufficiency."
+            evidence = (
+                f"Common ratio {ratios[0]} found in {ratios}. "
+                "Confidence based on pattern quality and data sufficiency."
+            )
             if reasoning_chain:
                 reasoning_chain.add_step(
-                    stage=stage,
-                    description=description,
-                    result=result,
-                    confidence=confidence,
-                    evidence=evidence,
-                    assumptions=assumptions,
+                    stage = stage,
+                    description = description,
+                    result = result,
+                    confidence = confidence,
+                    evidence = evidence,
+                    assumptions = assumptions,
                 )
             return result
 
@@ -439,7 +449,7 @@ def predict_next_in_sequence(
     )
     if reasoning_chain:
         reasoning_chain.add_step(
-            stage=stage, description=description, result=None, confidence=0.0
+            stage = stage, description = description, result = None, confidence = 0.0
         )
     return None
 
@@ -449,6 +459,7 @@ def predict_next_in_sequence(
     confidence_factors=["data_sufficiency", "pattern_quality", "complexity"],
 )
 @curry
+
 def find_pattern_description(
     sequence: List[float],
     reasoning_chain: Optional[ReasoningChain],
@@ -475,7 +486,7 @@ def find_pattern_description(
     # Input validation
     if not isinstance(sequence, (list, tuple, np.ndarray)):
         raise TypeError(
-            f"Expected list/tuple/array for sequence, got {type(sequence).__name__}"
+            f"Expected list / tuple / array for sequence, got {type(sequence).__name__}"
         )
     if len(sequence) == 0:
         raise ValueError("Sequence cannot be empty")
@@ -490,27 +501,30 @@ def find_pattern_description(
         result_str = "Sequence too short to determine a pattern."
         if reasoning_chain:
             reasoning_chain.add_step(
-                stage=stage, description=description, result=result_str, confidence=0.0
+                stage = stage, description = description, result = result_str, confidence = 0.0
             )
         return result_str
 
     # Check for arithmetic progression
     diffs = np.diff(sequence)
-    if len(diffs) > 0 and np.allclose(diffs, diffs[0], rtol=rtol, atol=atol):
+    if len(diffs) > 0 and np.allclose(diffs, diffs[0], rtol = rtol, atol = atol):
         result_str = f"Arithmetic progression with common difference: {diffs[0]}"
         # Use higher base confidence for pattern description than prediction
         confidence = _calculate_arithmetic_confidence(
-            diffs, len(sequence), base_confidence=0.9
+            diffs, len(sequence), base_confidence = 0.9
         )
-        evidence = f"Common difference {diffs[0]} found in {diffs}. Confidence based on pattern quality and data sufficiency."
+        evidence = (
+            f"Common difference {diffs[0]} found in {diffs}. "
+            "Confidence based on pattern quality and data sufficiency."
+        )
         if reasoning_chain:
             reasoning_chain.add_step(
-                stage=stage,
-                description=description,
-                result=result_str,
-                confidence=confidence,
-                evidence=evidence,
-                assumptions=assumptions,
+                stage = stage,
+                description = description,
+                result = result_str,
+                confidence = confidence,
+                evidence = evidence,
+                assumptions = assumptions,
             )
         return result_str
 
@@ -519,30 +533,33 @@ def find_pattern_description(
         ratios_list2 = [sequence[i] / sequence[i - 1] for i in range(1, len(sequence))]
         # Add bounds checking to prevent extreme values
         ratios = list(np.clip(ratios_list2, -1e6, 1e6))
-        if len(ratios) > 0 and np.allclose(ratios, ratios[0], rtol=rtol, atol=atol):
+        if len(ratios) > 0 and np.allclose(ratios, ratios[0], rtol = rtol, atol = atol):
             result_str = f"Geometric progression with common ratio: {ratios[0]}"
             # Use higher base confidence for pattern description than prediction
             confidence = _calculate_geometric_confidence(
-                ratios, len(sequence), base_confidence=0.9
+                ratios, len(sequence), base_confidence = 0.9
             )
-            evidence = f"Common ratio {ratios[0]} found in {ratios}. Confidence based on pattern quality and data sufficiency."
+            evidence = (
+                f"Common ratio {ratios[0]} found in {ratios}. "
+                "Confidence based on pattern quality and data sufficiency."
+            )
             if reasoning_chain:
                 reasoning_chain.add_step(
-                    stage=stage,
-                    description=description,
-                    result=result_str,
-                    confidence=confidence,
-                    evidence=evidence,
-                    assumptions=assumptions,
+                    stage = stage,
+                    description = description,
+                    result = result_str,
+                    confidence = confidence,
+                    evidence = evidence,
+                    assumptions = assumptions,
                 )
             return result_str
 
     if reasoning_chain:
         reasoning_chain.add_step(
-            stage=stage,
-            description=description,
-            result=result_str,
-            confidence=confidence,
+            stage = stage,
+            description = description,
+            result = result_str,
+            confidence = confidence,
         )
     return result_str
 
@@ -559,11 +576,11 @@ def _calculate_recursive_confidence(
 
     Args:
         sequence_length (int): Length of the original sequence
-        match_score (float): How well the pattern matches (0.0-1.0)
+        match_score (float): How well the pattern matches (0.0 - 1.0)
         base_confidence (float): Base confidence level before adjustments
 
     Returns:
-        float: Adjusted confidence score (0.0-1.0)
+        float: Adjusted confidence score (0.0 - 1.0)
     """
     # Data sufficiency factor - recursive patterns need more data
     minimum_required = 5  # Need at least 5 terms for reliable recursive detection
@@ -597,18 +614,18 @@ def _calculate_polynomial_confidence(
 
     Args:
         sequence_length (int): Length of the original sequence
-        r_squared (float): R-squared value from polynomial fit
+        r_squared (float): R - squared value from polynomial fit
         degree (int): Degree of the polynomial
         base_confidence (float): Base confidence level before adjustments
 
     Returns:
-        float: Adjusted confidence score (0.0-1.0)
+        float: Adjusted confidence score (0.0 - 1.0)
     """
     # Data sufficiency factor
     minimum_required = degree + 3  # Need at least degree + 3 points for reliable fit
     data_sufficiency_factor = min(1.0, sequence_length / minimum_required)
 
-    # Pattern quality factor - based on R-squared
+    # Pattern quality factor - based on R - squared
     pattern_quality_factor = r_squared
 
     # Complexity factor - higher degree polynomials are more complex
@@ -625,9 +642,10 @@ def _calculate_polynomial_confidence(
     return min(1.0, max(0.0, confidence))
 
 
-def detect_fibonacci_pattern(sequence: List[float], tolerance: float = 1e-10) -> Optional[Dict[str, Any]]:
+def detect_fibonacci_pattern(sequence: List[float],
+                             tolerance: float = 1e-10) -> Optional[Dict[str, Any]]:
     """
-    Detect Fibonacci-like recursive patterns in a sequence.
+    Detect Fibonacci - like recursive patterns in a sequence.
 
     Args:
         sequence (List[float]): The sequence to analyze
@@ -648,7 +666,7 @@ def detect_fibonacci_pattern(sequence: List[float], tolerance: float = 1e-10) ->
     # CRITICAL #7: Check timeout before intensive computation
     _create_computation_timeout(start_time, "detect_fibonacci_pattern")
 
-    # Check if sequence follows Fibonacci rule: F[n] = F[n-1] + F[n-2]
+    # Check if sequence follows Fibonacci rule: F[n] = F[n - 1] + F[n - 2]
     actual_sequence = np.array(sequence)
     calculated_sequence = np.zeros_like(actual_sequence)
 
@@ -664,10 +682,11 @@ def detect_fibonacci_pattern(sequence: List[float], tolerance: float = 1e-10) ->
                 _create_computation_timeout(start_time, "detect_fibonacci_pattern")
 
             # Check for overflow before performing operation
-            if abs(calculated_sequence[i-1]) > _VALUE_MAGNITUDE_LIMIT or abs(calculated_sequence[i-2]) > _VALUE_MAGNITUDE_LIMIT:
+            if (abs(calculated_sequence[i - 1]) > _VALUE_MAGNITUDE_LIMIT or
+                  abs(calculated_sequence[i - 2]) > _VALUE_MAGNITUDE_LIMIT):
                 raise ValueError(f"Value overflow detected at position {i} in Fibonacci calculation")
 
-            calculated_sequence[i] = calculated_sequence[i-1] + calculated_sequence[i-2]
+            calculated_sequence[i] = calculated_sequence[i - 1] + calculated_sequence[i - 2]
     except (OverflowError, FloatingPointError) as e:
         raise ValueError(f"Arithmetic overflow in Fibonacci pattern detection: {e}")
 
@@ -675,7 +694,7 @@ def detect_fibonacci_pattern(sequence: List[float], tolerance: float = 1e-10) ->
     _create_computation_timeout(start_time, "detect_fibonacci_pattern")
 
     # Check how well the calculated sequence matches the actual one
-    if np.allclose(actual_sequence, calculated_sequence, atol=tolerance):
+    if np.allclose(actual_sequence, calculated_sequence, atol = tolerance):
         # Calculate confidence based on how perfect the match is
         match_score = 1.0 - np.mean(np.abs(actual_sequence - calculated_sequence)) / (np.mean(np.abs(actual_sequence)) + 1e-10)
         match_score = max(0.0, min(1.0, match_score))
@@ -685,7 +704,7 @@ def detect_fibonacci_pattern(sequence: List[float], tolerance: float = 1e-10) ->
 
         return {
             "type": "fibonacci",
-            "rule": "F[n] = F[n-1] + F[n-2]",
+            "rule": "F[n] = F[n - 1] + F[n - 2]",
             "next_term": float(next_term),
             "confidence": _calculate_recursive_confidence(len(sequence), match_score),
             "seed_values": [float(actual_sequence[0]), float(actual_sequence[1])]
@@ -694,7 +713,8 @@ def detect_fibonacci_pattern(sequence: List[float], tolerance: float = 1e-10) ->
     return None
 
 
-def detect_lucas_pattern(sequence: List[float], tolerance: float = 1e-10) -> Optional[Dict[str, Any]]:
+def detect_lucas_pattern(sequence: List[float],
+                         tolerance: float = 1e-10) -> Optional[Dict[str, Any]]:
     """
     Detect Lucas sequence pattern (Fibonacci variant with different seeds).
 
@@ -733,20 +753,21 @@ def detect_lucas_pattern(sequence: List[float], tolerance: float = 1e-10) -> Opt
                 _create_computation_timeout(start_time, "detect_lucas_pattern")
 
             # Check for overflow before performing operation
-            if abs(calculated_sequence[i-1]) > _VALUE_MAGNITUDE_LIMIT or abs(calculated_sequence[i-2]) > _VALUE_MAGNITUDE_LIMIT:
+            if (abs(calculated_sequence[i - 1]) > _VALUE_MAGNITUDE_LIMIT or
+                  abs(calculated_sequence[i - 2]) > _VALUE_MAGNITUDE_LIMIT):
                 raise ValueError(f"Value overflow detected at position {i} in Lucas calculation")
 
-            calculated_sequence[i] = calculated_sequence[i-1] + calculated_sequence[i-2]
+            calculated_sequence[i] = calculated_sequence[i - 1] + calculated_sequence[i - 2]
     except (OverflowError, FloatingPointError) as e:
         raise ValueError(f"Arithmetic overflow in Lucas pattern detection: {e}")
 
     # CRITICAL #7: Final timeout check
     _create_computation_timeout(start_time, "detect_lucas_pattern")
 
-    # Check if it's a Lucas sequence (should start with 2, 1) or Lucas-like
-    is_classic_lucas = np.allclose(actual_sequence[:2], [2, 1], atol=tolerance)
+    # Check if it's a Lucas sequence (should start with 2, 1) or Lucas - like
+    is_classic_lucas = np.allclose(actual_sequence[:2], [2, 1], atol = tolerance)
 
-    if np.allclose(actual_sequence, calculated_sequence, atol=tolerance):
+    if np.allclose(actual_sequence, calculated_sequence, atol = tolerance):
         # Calculate confidence based on how perfect the match is
         match_score = 1.0 - np.mean(np.abs(actual_sequence - calculated_sequence)) / (np.mean(np.abs(actual_sequence)) + 1e-10)
         match_score = max(0.0, min(1.0, match_score))
@@ -759,9 +780,10 @@ def detect_lucas_pattern(sequence: List[float], tolerance: float = 1e-10) -> Opt
 
         return {
             "type": "lucas" if is_classic_lucas else "lucas_variant",
-            "rule": "L[n] = L[n-1] + L[n-2]",
+            "rule": "L[n] = L[n - 1] + L[n - 2]",
             "next_term": float(next_term),
-            "confidence": _calculate_recursive_confidence(len(sequence), match_score, base_confidence),
+            "confidence": _calculate_recursive_confidence(len(sequence),
+                                                          match_score, base_confidence),
             "seed_values": [float(actual_sequence[0]), float(actual_sequence[1])],
             "is_classic": is_classic_lucas
         }
@@ -769,7 +791,8 @@ def detect_lucas_pattern(sequence: List[float], tolerance: float = 1e-10) -> Opt
     return None
 
 
-def detect_tribonacci_pattern(sequence: List[float], tolerance: float = 1e-10) -> Optional[Dict[str, Any]]:
+def detect_tribonacci_pattern(sequence: List[float],
+                              tolerance: float = 1e-10) -> Optional[Dict[str, Any]]:
     """
     Detect Tribonacci sequence pattern (sum of previous 3 terms).
 
@@ -792,7 +815,7 @@ def detect_tribonacci_pattern(sequence: List[float], tolerance: float = 1e-10) -
     # CRITICAL #7: Check timeout before intensive computation
     _create_computation_timeout(start_time, "detect_tribonacci_pattern")
 
-    # Check if sequence follows Tribonacci rule: T[n] = T[n-1] + T[n-2] + T[n-3]
+    # Check if sequence follows Tribonacci rule: T[n] = T[n - 1] + T[n - 2] + T[n - 3]
     actual_sequence = np.array(sequence)
     calculated_sequence = np.zeros_like(actual_sequence)
 
@@ -809,12 +832,12 @@ def detect_tribonacci_pattern(sequence: List[float], tolerance: float = 1e-10) -
                 _create_computation_timeout(start_time, "detect_tribonacci_pattern")
 
             # Check for overflow before performing operation
-            if (abs(calculated_sequence[i-1]) > _VALUE_MAGNITUDE_LIMIT or
-                abs(calculated_sequence[i-2]) > _VALUE_MAGNITUDE_LIMIT or
-                abs(calculated_sequence[i-3]) > _VALUE_MAGNITUDE_LIMIT):
+            if (abs(calculated_sequence[i - 1]) > _VALUE_MAGNITUDE_LIMIT or
+                  abs(calculated_sequence[i - 2]) > _VALUE_MAGNITUDE_LIMIT or
+                  abs(calculated_sequence[i - 3]) > _VALUE_MAGNITUDE_LIMIT):
                 raise ValueError(f"Value overflow detected at position {i} in Tribonacci calculation")
 
-            calculated_sequence[i] = calculated_sequence[i-1] + calculated_sequence[i-2] + calculated_sequence[i-3]
+            calculated_sequence[i] = calculated_sequence[i - 1] + calculated_sequence[i - 2] + calculated_sequence[i - 3]
     except (OverflowError, FloatingPointError) as e:
         raise ValueError(f"Arithmetic overflow in Tribonacci pattern detection: {e}")
 
@@ -822,7 +845,7 @@ def detect_tribonacci_pattern(sequence: List[float], tolerance: float = 1e-10) -
     _create_computation_timeout(start_time, "detect_tribonacci_pattern")
 
     # Check how well the calculated sequence matches the actual one
-    if np.allclose(actual_sequence, calculated_sequence, atol=tolerance):
+    if np.allclose(actual_sequence, calculated_sequence, atol = tolerance):
         # Calculate confidence based on how perfect the match is
         match_score = 1.0 - np.mean(np.abs(actual_sequence - calculated_sequence)) / (np.mean(np.abs(actual_sequence)) + 1e-10)
         match_score = max(0.0, min(1.0, match_score))
@@ -832,16 +855,19 @@ def detect_tribonacci_pattern(sequence: List[float], tolerance: float = 1e-10) -
 
         return {
             "type": "tribonacci",
-            "rule": "T[n] = T[n-1] + T[n-2] + T[n-3]",
+            "rule": "T[n] = T[n - 1] + T[n - 2] + T[n - 3]",
             "next_term": float(next_term),
-            "confidence": _calculate_recursive_confidence(len(sequence), match_score, 0.8),  # Slightly lower base confidence
-            "seed_values": [float(actual_sequence[0]), float(actual_sequence[1]), float(actual_sequence[2])]
+            "confidence": _calculate_recursive_confidence(len(sequence),
+                                                          match_score, 0.8),  # Slightly lower base confidence
+            "seed_values": [float(actual_sequence[0]),
+                                  float(actual_sequence[1]), float(actual_sequence[2])]
         }
 
     return None
 
 
-def detect_polynomial_pattern(sequence: List[float], max_degree: int = 3) -> Optional[Dict[str, Any]]:
+def detect_polynomial_pattern(sequence: List[float],
+                              max_degree: int = 3) -> Optional[Dict[str, Any]]:
     """
     Detect polynomial patterns (squares, cubes, etc.) in a sequence.
 
@@ -855,7 +881,7 @@ def detect_polynomial_pattern(sequence: List[float], max_degree: int = 3) -> Opt
     if len(sequence) < max_degree + 2:  # Need enough points for polynomial fitting
         return None
 
-    x_values = np.arange(1, len(sequence) + 1)  # 1-indexed positions
+    x_values = np.arange(1, len(sequence) + 1)  # 1 - indexed positions
     y_values = np.array(sequence)
 
     best_fit = None
@@ -870,22 +896,22 @@ def detect_polynomial_pattern(sequence: List[float], max_degree: int = 3) -> Opt
         coefficients = np.polyfit(x_values, y_values, degree)
         predicted_values = np.polyval(coefficients, x_values)
 
-        # Calculate R-squared
+        # Calculate R - squared
         ss_res = np.sum((y_values - predicted_values) ** 2)
         ss_tot = np.sum((y_values - np.mean(y_values)) ** 2)
         r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
 
-        # Consider it a good fit if R-squared is high
+        # Consider it a good fit if R - squared is high
         if r_squared > 0.95 and r_squared > best_r_squared:
             best_r_squared = r_squared
             next_x = len(sequence) + 1
             next_term = np.polyval(coefficients, next_x)
 
             # Determine pattern type
-            if degree == 2 and np.allclose(coefficients, [1, 0, 0], atol=1e-6):
+            if degree == 2 and np.allclose(coefficients, [1, 0, 0], atol = 1e-6):
                 pattern_type = "perfect_squares"
                 description = "Perfect squares (n²)"
-            elif degree == 3 and np.allclose(coefficients, [1, 0, 0, 0], atol=1e-6):
+            elif degree == 3 and np.allclose(coefficients, [1, 0, 0, 0], atol = 1e-6):
                 pattern_type = "perfect_cubes"
                 description = "Perfect cubes (n³)"
             elif degree == 2:
@@ -904,16 +930,18 @@ def detect_polynomial_pattern(sequence: List[float], max_degree: int = 3) -> Opt
                 "degree": degree,
                 "coefficients": [float(c) for c in coefficients],
                 "next_term": float(next_term),
-                "confidence": _calculate_polynomial_confidence(len(sequence), r_squared, degree),
+                "confidence": _calculate_polynomial_confidence(len(sequence),
+                                                               r_squared, degree),
                 "r_squared": r_squared
             }
 
     return best_fit
 
 
-def detect_exponential_pattern(sequence: List[float], rtol: float = 0.1, atol: float = 1e-8) -> Optional[Dict[str, Any]]:
+def detect_exponential_pattern(sequence: List[float],
+                               rtol: float = 0.1, atol: float = 1e-8) -> Optional[Dict[str, Any]]:
     """
-    Detect exponential patterns of the form a * b^n.
+    Detect exponential patterns of the form a * b ^ n.
 
     Args:
         sequence (List[float]): The sequence to analyze
@@ -936,7 +964,7 @@ def detect_exponential_pattern(sequence: List[float], rtol: float = 0.1, atol: f
     # Take logarithm to linearize exponential pattern
     log_y = np.log(y_values)
 
-    # Fit linear regression to log-transformed data
+    # Fit linear regression to log - transformed data
     coeffs = np.polyfit(x_values, log_y, 1)
     log_a = coeffs[1]  # intercept
     log_b = coeffs[0]  # slope
@@ -949,7 +977,7 @@ def detect_exponential_pattern(sequence: List[float], rtol: float = 0.1, atol: f
     predicted_values = np.exp(predicted_log)
 
     # Check how well the exponential model fits
-    if np.allclose(y_values, predicted_values, rtol=rtol, atol=atol):
+    if np.allclose(y_values, predicted_values, rtol = rtol, atol = atol):
         # Calculate confidence based on fit quality
         relative_error = np.mean(np.abs((y_values - predicted_values) / y_values))
         match_score = max(0.0, 1.0 - relative_error / rtol)
@@ -988,7 +1016,7 @@ def detect_custom_step_patterns(sequence: List[float]) -> List[Dict[str, Any]]:
     detected_patterns = []
     differences = np.diff(sequence)
 
-    # Check for alternating patterns (2-cycle)
+    # Check for alternating patterns (2 - cycle)
     if len(differences) >= 4:
         # Extract odd and even indexed differences
         odd_diffs = differences[::2]  # indices 0, 2, 4...
@@ -996,8 +1024,8 @@ def detect_custom_step_patterns(sequence: List[float]) -> List[Dict[str, Any]]:
 
         if len(odd_diffs) >= 2 and len(even_diffs) >= 2:
             # Check if odd differences are roughly constant
-            odd_constant = np.allclose(odd_diffs, odd_diffs[0], rtol=0.1, atol=1e-6)
-            even_constant = np.allclose(even_diffs, even_diffs[0], rtol=0.1, atol=1e-6)
+            odd_constant = np.allclose(odd_diffs, odd_diffs[0], rtol = 0.1, atol = 1e-6)
+            even_constant = np.allclose(even_diffs, even_diffs[0], rtol = 0.1, atol = 1e-6)
 
             if odd_constant and even_constant:
                 # We have an alternating pattern
@@ -1035,7 +1063,7 @@ def detect_custom_step_patterns(sequence: List[float]) -> List[Dict[str, Any]]:
                 # Build expected sequence
                 expected = pattern * repetitions + pattern[:remainder]
 
-                if np.allclose(sequence, expected, rtol=0.05, atol=1e-6):
+                if np.allclose(sequence, expected, rtol = 0.05, atol = 1e-6):
                     # Calculate next term
                     next_pos = len(sequence) % period
                     next_term = pattern[next_pos]
@@ -1058,6 +1086,7 @@ def detect_custom_step_patterns(sequence: List[float]) -> List[Dict[str, Any]]:
     confidence_formula="base * data_sufficiency_factor * pattern_quality_factor * complexity_factor",
 )
 @curry
+
 def detect_recursive_pattern(
     sequence: List[float],
     reasoning_chain: Optional[ReasoningChain],
@@ -1077,7 +1106,10 @@ def detect_recursive_pattern(
     """
     # CRITICAL #7: DoS Protection - Validate input (also handles type conversion)
     if not isinstance(sequence, (list, tuple, np.ndarray)):
-        raise TypeError(f"Expected list/tuple/array for sequence, got {type(sequence).__name__}")
+        raise TypeError(
+            f"Expected list / tuple / array for sequence, "
+            f"got {type(sequence).__name__}"
+        )
 
     # Convert to list for validation
     sequence_list = list(sequence)
@@ -1090,9 +1122,9 @@ def detect_recursive_pattern(
         if reasoning_chain:
             reasoning_chain.add_step(
                 stage="Inductive Reasoning: Recursive Pattern Detection",
-                description=f"Sequence {sequence_list} too short for recursive pattern detection",
-                result=None,
-                confidence=0.0
+                description = f"Sequence {sequence_list} too short for recursive pattern detection",
+                result = None,
+                confidence = 0.0
             )
         return None
 
@@ -1120,10 +1152,10 @@ def detect_recursive_pattern(
                 if reasoning_chain:
                     reasoning_chain.add_step(
                         stage="Inductive Reasoning: Recursive Pattern Detection",
-                        description=f"Detected {pattern_name} pattern: {result['description'] if 'description' in result else result['rule']}",
-                        result=result,
-                        confidence=result['confidence'],
-                        evidence=f"Pattern rule: {result['rule']}. Next term: {result['next_term']}",
+                        description = f"Detected {pattern_name} pattern: {result['description'] if 'description' in result else result['rule']}",
+                        result = result,
+                        confidence = result['confidence'],
+                        evidence = f"Pattern rule: {result['rule']}. Next term: {result['next_term']}",
                         assumptions=[f"Sequence follows {pattern_name.lower()} recurrence relation"]
                     )
                 return result
@@ -1134,9 +1166,9 @@ def detect_recursive_pattern(
     if reasoning_chain:
         reasoning_chain.add_step(
             stage="Inductive Reasoning: Recursive Pattern Detection",
-            description=f"No recursive pattern found in sequence: {sequence_list}",
-            result=None,
-            confidence=0.0
+            description = f"No recursive pattern found in sequence: {sequence_list}",
+            result = None,
+            confidence = 0.0
         )
 
     return None

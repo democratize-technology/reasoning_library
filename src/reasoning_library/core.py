@@ -7,23 +7,23 @@ import re
 import threading
 import weakref
 from dataclasses import dataclass, field
-from functools import wraps, lru_cache
+from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 # Security constants and compiled patterns
 MAX_SOURCE_CODE_SIZE = 10000  # Prevent ReDoS attacks by limiting input size
 
-# Pre-compiled regex patterns with ReDoS vulnerability fixes
+# Pre - compiled regex patterns with ReDoS vulnerability fixes
 # Using more specific patterns to avoid catastrophic backtracking
 FACTOR_PATTERN = re.compile(
-    r"(\w{0,30}(?:data_sufficiency|pattern_quality|complexity)_factor)[\s]{0,5}(?:\*|,|\+|\-|=)",
+    r"(\w{0,30}(?:data_sufficiency | pattern_quality | complexity)_factor)[\s]{0,5}(?:\*|,|\+|\-|=)",
     re.IGNORECASE | re.MULTILINE,
 )
 COMMENT_PATTERN = re.compile(
-    r"#\s*(?:Data|Pattern|Complexity)\s+([^#\n]+factor)", re.IGNORECASE | re.MULTILINE
+    r"#\s*(?:Data | Pattern | Complexity)\s+([^#\n]+factor)", re.IGNORECASE | re.MULTILINE
 )
 EVIDENCE_PATTERN = re.compile(
-    r'f?"[^"]*(?:confidence\s+based\s+on|factors?[\s:]*in)[^"]*([^"\.]+pattern[^"\.]*)',
+    r'f?"[^"]*(?:confidence\s + based\s + on | factors?[\s:]*in)[^"]*([^"\.]+pattern[^"\.]*)',
     re.IGNORECASE | re.MULTILINE,
 )
 COMBINATION_PATTERN = re.compile(
@@ -48,10 +48,10 @@ _MAX_CACHE_SIZE = 1000
 # This limit prevents DoS while maintaining reasonable tool capacity
 _MAX_REGISTRY_SIZE = 500
 
-# Thread-safe locks for registry operations
+# Thread - safe locks for registry operations
 _registry_lock = threading.RLock()
 
-# Thread-safe locks for cache operations
+# Thread - safe locks for cache operations
 _cache_lock = threading.RLock()
 
 def _get_function_source_cached(func: Callable[..., Any]) -> str:
@@ -65,7 +65,7 @@ def _get_function_source_cached(func: Callable[..., Any]) -> str:
     - File system access and path traversal through code inspection
     - Proprietary algorithm exposure
 
-    Thread-safe: Uses _cache_lock to prevent race conditions in cache access.
+    Thread - safe: Uses _cache_lock to prevent race conditions in cache access.
 
     Args:
         func: Function to analyze (source code will NOT be extracted for security)
@@ -78,7 +78,7 @@ def _get_function_source_cached(func: Callable[..., Any]) -> str:
     # information including API keys, passwords, and proprietary algorithms.
     # This function now returns empty string for all inputs to eliminate the attack vector.
 
-    # Thread-safe cache access with proper locking
+    # Thread - safe cache access with proper locking
     with _cache_lock:
         # Check cache first (WeakKeyDictionary automatically handles cleanup)
         if func in _function_source_cache:
@@ -91,14 +91,15 @@ def _get_function_source_cached(func: Callable[..., Any]) -> str:
         _function_source_cache[func] = empty_result
         return empty_result
 
-def _get_math_detection_cached(func: Callable[..., Any]) -> Tuple[bool, Optional[str], Optional[str]]:
+def _get_math_detection_cached(func: Callable[...,
+                               Any]) -> Tuple[bool, Optional[str], Optional[str]]:
     """
     Get mathematical reasoning detection result with caching.
 
     Uses function id as cache key for stability across calls.
-    Implements LRU-style eviction to prevent unbounded cache growth.
+    Implements LRU - style eviction to prevent unbounded cache growth.
 
-    Thread-safe: Uses _cache_lock to prevent race conditions in cache access
+    Thread - safe: Uses _cache_lock to prevent race conditions in cache access
     and eviction logic that could cause data corruption.
 
     Args:
@@ -107,21 +108,46 @@ def _get_math_detection_cached(func: Callable[..., Any]) -> Tuple[bool, Optional
     Returns:
         tuple: (is_mathematical, confidence_documentation, mathematical_basis)
     """
-    func_id = id(func)
+    # Create a stable cache key that includes function identity and content
+    # This prevents false cache hits when Python reuses object IDs
+    try:
+        import hashlib
+        func_name = getattr(func, '__name__', 'unknown')  # TODO: remove unused variable
+        func_module = getattr(func, '__module__', 'unknown')
+        func_qualname = getattr(func, '__qualname__', 'unknown')
 
-    # Thread-safe cache access with proper locking
+        # Get source code for content - based hashing
+        try:
+            import inspect
+            source_code = inspect.getsource(func) or ''
+        except (OSError, TypeError):
+            source_code = ''
+
+        docstring = func.__doc__ or ''
+
+        # Create a hash based on multiple stable identifiers
+        content = f"{func_module}:{func_qualname}:{docstring}:{source_code}"
+        func_id = hashlib.md5(content.encode()).hexdigest()
+
+    except Exception:
+        # Fallback to object ID if hashing fails (less safe but functional)
+        func_id = str(id(func))
+
+    # Thread - safe cache access with proper locking
     with _cache_lock:
-        # Check cache first
-        if func_id in _math_detection_cache:
+        # Check cache first (ensure cached value is not None)
+        if (func_id in _math_detection_cache and
+                _math_detection_cache[func_id] is not None):
             return _math_detection_cache[func_id]
 
     # Perform expensive detection outside of lock to minimize contention
     result = _detect_mathematical_reasoning_uncached(func)
 
-    # Thread-safe cache update and eviction with proper locking
+    # Thread - safe cache update and eviction with proper locking
     with _cache_lock:
-        # Double-check pattern: another thread might have added this while we were detecting
-        if func_id in _math_detection_cache:
+        # Double - check pattern: another thread might have added this while we were detecting
+        if (func_id in _math_detection_cache and
+                _math_detection_cache[func_id] is not None):
             return _math_detection_cache[func_id]
 
         # Implement atomic cache size management and eviction
@@ -132,6 +158,10 @@ def _get_math_detection_cached(func: Callable[..., Any]) -> Tuple[bool, Optional
             for key in oldest_keys:
                 _math_detection_cache.pop(key, None)
 
+        # Ensure result is always a valid tuple (defensive programming)
+        if result is None or not isinstance(result, tuple) or len(result) != 3:
+            result = (False, None, None)
+
         # Cache the result
         _math_detection_cache[func_id] = result
         return result
@@ -140,11 +170,11 @@ def _manage_registry_size():
     """
     Manage registry size to prevent unbounded growth and memory exhaustion attacks.
 
-    Implements FIFO-style eviction for both ENHANCED_TOOL_REGISTRY and TOOL_REGISTRY
+    Implements FIFO - style eviction for both ENHANCED_TOOL_REGISTRY and TOOL_REGISTRY
     to maintain bounded memory usage. Only performs expensive operations when
     actually exceeding limits to maintain O(1) performance for normal use.
 
-    Thread-safe: Uses _registry_lock to prevent race conditions.
+    Thread - safe: Uses _registry_lock to prevent race conditions.
     """
     with _registry_lock:
         # Early exit if both registries are under limit (O(1) performance)
@@ -170,7 +200,7 @@ def clear_performance_caches() -> Dict[str, int]:
 
     Useful for testing, memory management, or when function definitions change.
 
-    Thread-safe: Uses both _registry_lock and _cache_lock to prevent race conditions.
+    Thread - safe: Uses both _registry_lock and _cache_lock to prevent race conditions.
 
     Returns:
         dict: Statistics about cleared cache entries
@@ -204,22 +234,24 @@ TOOL_REGISTRY: List[Callable[..., Any]] = []
 
 
 @dataclass
+
 class ToolMetadata:
     """Enhanced metadata for tool specifications."""
 
     confidence_documentation: Optional[str] = None
     mathematical_basis: Optional[str] = None
-    platform_notes: Optional[Dict[str, str]] = field(default_factory=dict)
+    platform_notes: Optional[Dict[str, str]] = field(default_factory = dict)
     is_mathematical_reasoning: bool = False
     confidence_formula: Optional[str] = None
-    confidence_factors: Optional[List[str]] = field(default_factory=list)
+    confidence_factors: Optional[List[str]] = field(default_factory = list)
 
 
 def _detect_mathematical_reasoning_uncached(
     func: Callable[..., Any],
 ) -> Tuple[bool, Optional[str], Optional[str]]:
     """
-    Detect if a function performs mathematical reasoning and extract confidence documentation.
+    Detect if a function performs mathematical reasoning and
+        extract confidence documentation.
 
     Optimized to perform fast initial checks before expensive source code extraction.
 
@@ -239,6 +271,7 @@ def _detect_mathematical_reasoning_uncached(
         "pattern",
         "deductive",
         "inductive",
+        "modus ponens",
         "modus_ponens",
         "logical",
         "reasoning_chain",
@@ -254,7 +287,7 @@ def _detect_mathematical_reasoning_uncached(
         for indicator in math_indicators
     )
 
-    # If no mathematical indicators in docs/name, likely not mathematical
+    # If no mathematical indicators in docs / name, likely not mathematical
     if not has_math_indicators_in_docs:
         return False, None, None
 
@@ -275,26 +308,26 @@ def _detect_mathematical_reasoning_uncached(
         # Extract confidence calculation patterns with improved semantic focus
         confidence_factors = []
 
-        # Pattern 1: Extract confidence factor variable names using pre-compiled pattern
+        # Pattern 1: Extract confidence factor variable names using pre - compiled pattern
         factor_matches = FACTOR_PATTERN.findall(source_code)
         if factor_matches:
             confidence_factors.extend(
                 [factor.replace("_", " ") for factor in factor_matches[:3]]
             )
 
-        # Pattern 2: Extract meaningful descriptive comments using pre-compiled pattern
+        # Pattern 2: Extract meaningful descriptive comments using pre - compiled pattern
         comment_matches = COMMENT_PATTERN.findall(source_code)
         if comment_matches:
             confidence_factors.extend(
                 [match.strip().lower() for match in comment_matches[:2]]
             )
 
-        # Pattern 3: Extract from evidence strings with confidence calculations using pre-compiled pattern
+        # Pattern 3: Extract from evidence strings with confidence calculations using pre - compiled pattern
         evidence_matches = EVIDENCE_PATTERN.findall(source_code)
         if evidence_matches:
             confidence_factors.extend([match.strip() for match in evidence_matches[:1]])
 
-        # Pattern 4: Look for factor multiplication combinations using pre-compiled pattern
+        # Pattern 4: Look for factor multiplication combinations using pre - compiled pattern
         combination_matches = COMBINATION_PATTERN.findall(source_code)
         if combination_matches and not confidence_factors:
             # If we haven't found factors yet, use the combination pattern
@@ -323,7 +356,7 @@ def _detect_mathematical_reasoning_uncached(
             seen = set()
             for factor in confidence_factors:
                 clean_factor = factor.strip().lower()
-                # Remove common code artifacts using pre-compiled pattern
+                # Remove common code artifacts using pre - compiled pattern
                 clean_factor = CLEAN_FACTOR_PATTERN.sub("", clean_factor).strip()
                 if clean_factor and clean_factor not in seen and len(clean_factor) > 2:
                     clean_factors.append(clean_factor)
@@ -336,7 +369,10 @@ def _detect_mathematical_reasoning_uncached(
 
         # Extract mathematical basis from docstring or code
         if "arithmetic progression" in docstring.lower():
-            mathematical_basis = "Arithmetic progression analysis with data sufficiency and pattern quality factors"
+            mathematical_basis = (
+                "Arithmetic progression analysis with data sufficiency and "
+                "pattern quality factors"
+            )
         elif "geometric progression" in docstring.lower():
             mathematical_basis = (
                 "Geometric progression analysis with ratio consistency validation"
@@ -348,7 +384,7 @@ def _detect_mathematical_reasoning_uncached(
         elif "chain of thought" in docstring.lower():
             mathematical_basis = "Sequential reasoning with conservative confidence aggregation (minimum of step confidences)"
 
-    return is_mathematical, confidence_doc, mathematical_basis
+        return is_mathematical, confidence_doc, mathematical_basis
 
 
 def _detect_mathematical_reasoning(
@@ -405,25 +441,30 @@ def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
         text = text[:max_length]
 
         # Remove dangerous characters that could be used for injection
-        sanitized = re.sub(r'[<>"\'`]', '', text)  # Remove HTML/JS injection characters
-        sanitized = re.sub(r'[{}]', '', sanitized)  # Remove template injection characters
+        sanitized = re.sub(r'[<>"\'`]', '', text)  # Remove HTML / JS injection characters
+        sanitized = re.sub(r'[{}]',
+                           '', sanitized)  # Remove template injection characters
         sanitized = re.sub(r'\${[^}]*}', '', sanitized)  # Remove ${...} patterns
         sanitized = re.sub(r'%[sd]', '', sanitized)      # Remove %s, %d patterns
-        sanitized = re.sub(r'__import__\s*\(', 'BLOCKED', sanitized)  # Block import attempts
-        sanitized = re.sub(r'eval\s*\(', 'BLOCKED', sanitized)      # Block eval attempts
-        sanitized = re.sub(r'exec\s*\(', 'BLOCKED', sanitized)      # Block exec attempts
+        sanitized = re.sub(r'__import__\s*\(',
+                           'BLOCKED', sanitized)  # Block import attempts
+        sanitized = re.sub(r'eval\s*\(',
+                           'BLOCKED', sanitized)      # Block eval attempts
+        sanitized = re.sub(r'exec\s*\(',
+                           'BLOCKED', sanitized)      # Block exec attempts
 
         # Remove newlines and other control characters that could poison logs
         # CRITICAL FIX: Prevent log injection by normalizing newlines and control chars
-        sanitized = re.sub(r'[\r\n\t]', ' ', sanitized)  # Convert newlines/tabs to spaces
+        sanitized = re.sub(r'[\r\n\t]',
+                           ' ', sanitized)  # Convert newlines / tabs to spaces
         sanitized = re.sub(r'\s+', ' ', sanitized)       # Normalize multiple spaces
 
         # Remove potential ANSI escape sequences that could poison terminal logs
-        sanitized = re.sub(r'\x1b\[[0-9;]*m', '', sanitized)  # Remove ANSI color codes
+        sanitized = re.sub(r'\x1b\[[0 - 9;]*m', '', sanitized)  # Remove ANSI color codes
 
         return sanitized.strip()
 
-    # Whitelist of allowed top-level keys to prevent prototype pollution
+    # Whitelist of allowed top - level keys to prevent prototype pollution
     allowed_top_level_keys = {"type", "function"}
 
     # Whitelist of allowed function keys
@@ -447,9 +488,11 @@ def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
                     if func_key in allowed_function_keys:
                         # Sanitize all string values to prevent injection
                         if func_key == "name":
-                            safe_function[func_key] = sanitize_text_input(func_value, max_length=50)
+                            safe_function[func_key] = sanitize_text_input(func_value,
+                                                                          max_length = 50)
                         elif func_key == "description":
-                            safe_function[func_key] = sanitize_text_input(func_value, max_length=500)
+                            safe_function[func_key] = sanitize_text_input(func_value,
+                                                                          max_length = 500)
                         elif func_key == "parameters" and isinstance(func_value, dict):
                             # Recursively sanitize parameter object
                             safe_function[func_key] = _sanitize_parameters(func_value)
@@ -457,7 +500,7 @@ def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
                             safe_function[func_key] = func_value
                 safe_spec[key] = safe_function
             else:
-                safe_spec[key] = sanitize_text_input(value, max_length=100)
+                safe_spec[key] = sanitize_text_input(value, max_length = 100)
 
     return safe_spec
 
@@ -474,7 +517,7 @@ def _sanitize_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
         safe_params["properties"] = {}
         for param_name, param_spec in parameters["properties"].items():
             # Sanitize parameter name
-            safe_name = re.sub(r'[^a-zA-Z0-9_]', '', str(param_name))[:50]
+            safe_name = re.sub(r'[^a - zA - Z0 - 9_]', '', str(param_name))[:50]
             if not safe_name:
                 safe_name = "param"
 
@@ -483,7 +526,8 @@ def _sanitize_parameters(parameters: Dict[str, Any]) -> Dict[str, Any]:
                 safe_spec = {}
                 for spec_key, spec_value in param_spec.items():
                     if isinstance(spec_value, str):
-                        safe_spec[spec_key] = re.sub(r'[<>"\'`{}]', '', spec_value)[:200]
+                        safe_spec[spec_key] = re.sub(r'[<>"\'`{}]',
+                                                     '', spec_value)[:200]
                     else:
                         safe_spec[spec_key] = spec_value
                 safe_params["properties"][safe_name] = safe_spec
@@ -509,7 +553,7 @@ def _openai_format(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
         tool_spec: Standard tool specification
 
     Returns:
-        OpenAI-compatible tool specification
+        OpenAI - compatible tool specification
     """
     # Use safe copy to prevent prototype pollution
     safe_spec = _safe_copy_spec(tool_spec)
@@ -531,7 +575,7 @@ def _bedrock_format(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
         tool_spec: Standard tool specification
 
     Returns:
-        Bedrock-compatible tool specification
+        Bedrock - compatible tool specification
     """
     # Use safe copy to prevent prototype pollution
     safe_spec = _safe_copy_spec(tool_spec)
@@ -567,18 +611,22 @@ def _enhance_description_with_confidence_docs(
         return description
 
     def sanitize_confidence_text(text: Any) -> str:
-        """SECURE: Sanitize confidence-related text to prevent injection."""
+        """SECURE: Sanitize confidence - related text to prevent injection."""
         if not isinstance(text, str):
             return ""
 
         # Remove dangerous characters that could be used for injection
-        sanitized = re.sub(r'[<>"\'`]', '', text)  # Remove HTML/JS injection characters
-        sanitized = re.sub(r'[{}]', '', sanitized)  # Remove template injection characters
+        sanitized = re.sub(r'[<>"\'`]', '', text)  # Remove HTML / JS injection characters
+        sanitized = re.sub(r'[{}]',
+                           '', sanitized)  # Remove template injection characters
         sanitized = re.sub(r'\${[^}]*}', '', sanitized)  # Remove ${...} patterns
         sanitized = re.sub(r'%[sd]', '', sanitized)      # Remove %s, %d patterns
-        sanitized = re.sub(r'__import__\s*\(', 'BLOCKED', sanitized)  # Block import attempts
-        sanitized = re.sub(r'eval\s*\(', 'BLOCKED', sanitized)      # Block eval attempts
-        sanitized = re.sub(r'exec\s*\(', 'BLOCKED', sanitized)      # Block exec attempts
+        sanitized = re.sub(r'__import__\s*\(',
+                           'BLOCKED', sanitized)  # Block import attempts
+        sanitized = re.sub(r'eval\s*\(',
+                           'BLOCKED', sanitized)      # Block eval attempts
+        sanitized = re.sub(r'exec\s*\(',
+                           'BLOCKED', sanitized)      # Block exec attempts
 
         # Remove control characters that could poison logs
         sanitized = re.sub(r'[\r\n\t]', ' ', sanitized)
@@ -617,7 +665,7 @@ def get_tool_specs() -> List[Dict[str, Any]]:
     """
     Returns a list of all registered tool specifications (legacy format).
 
-    Thread-safe: Uses _registry_lock to prevent race conditions during iteration.
+    Thread - safe: Uses _registry_lock to prevent race conditions during iteration.
     """
     with _registry_lock:
         return [getattr(func, "tool_spec") for func in TOOL_REGISTRY.copy()]
@@ -627,10 +675,10 @@ def get_openai_tools() -> List[Dict[str, Any]]:
     """
     Export tool specifications in OpenAI ChatCompletions API format.
 
-    Thread-safe: Uses _registry_lock to prevent race conditions during iteration.
+    Thread - safe: Uses _registry_lock to prevent race conditions during iteration.
 
     Returns:
-        List of OpenAI-compatible tool specifications
+        List of OpenAI - compatible tool specifications
     """
     with _registry_lock:
         openai_tools = []
@@ -650,10 +698,10 @@ def get_bedrock_tools() -> List[Dict[str, Any]]:
     """
     Export tool specifications in AWS Bedrock Converse API format.
 
-    Thread-safe: Uses _registry_lock to prevent race conditions during iteration.
+    Thread - safe: Uses _registry_lock to prevent race conditions during iteration.
 
     Returns:
-        List of Bedrock-compatible tool specifications
+        List of Bedrock - compatible tool specifications
     """
     with _registry_lock:
         bedrock_tools = []
@@ -673,7 +721,7 @@ def get_enhanced_tool_registry() -> List[Dict[str, Any]]:
     """
     Get the complete enhanced tool registry with metadata.
 
-    Thread-safe: Uses _registry_lock to prevent race conditions during access.
+    Thread - safe: Uses _registry_lock to prevent race conditions during access.
 
     Returns:
         List of enhanced tool registry entries
@@ -694,10 +742,11 @@ def curry(func: Callable[..., Any]) -> Callable[..., Any]:
     sig = inspect.signature(func)
 
     @wraps(func)
+
     def curried(*args: Any, **kwargs: Any) -> Any:
         try:
             # Try to bind the arguments - this will fail if we don't have enough required args
-            bound = sig.bind(*args, **kwargs)
+            bound = sig.bind(*args, **kwargs)  # TODO: remove unused variable
         except TypeError:
             # If binding fails (insufficient args), return a curried function
             return lambda *args2, **kwargs2: curried(
@@ -712,6 +761,7 @@ def curry(func: Callable[..., Any]) -> Callable[..., Any]:
 
 
 @dataclass
+
 class ReasoningStep:
     """
     Represents a single step in a reasoning chain, including its result and metadata.
@@ -723,18 +773,19 @@ class ReasoningStep:
     result: Any
     confidence: Optional[float] = None
     evidence: Optional[str] = None
-    assumptions: Optional[List[str]] = field(default_factory=list)
-    metadata: Optional[Dict[str, Any]] = field(default_factory=dict)
+    assumptions: Optional[List[str]] = field(default_factory = list)
+    metadata: Optional[Dict[str, Any]] = field(default_factory = dict)
 
 
 @dataclass
+
 class ReasoningChain:
     """
-    Manages a sequence of ReasoningStep objects, providing chain-of-thought capabilities.
+    Manages a sequence of ReasoningStep objects, providing chain - of - thought capabilities.
     """
 
-    steps: List[ReasoningStep] = field(default_factory=list)
-    _step_counter: int = field(init=False, default=0)
+    steps: List[ReasoningStep] = field(default_factory = list)
+    _step_counter: int = field(init = False, default = 0)
 
     def add_step(
         self,
@@ -751,14 +802,14 @@ class ReasoningChain:
         """
         self._step_counter += 1
         step = ReasoningStep(
-            step_number=self._step_counter,
-            stage=stage,
-            description=description,
-            result=result,
-            confidence=confidence,
-            evidence=evidence,
-            assumptions=assumptions if assumptions is not None else [],
-            metadata=metadata if metadata is not None else {},
+            step_number = self._step_counter,
+            stage = stage,
+            description = description,
+            result = result,
+            confidence = confidence,
+            evidence = evidence,
+            assumptions = assumptions if assumptions is not None else [],
+            metadata = metadata if metadata is not None else {},
         )
         self.steps.append(step)
         return step
@@ -777,6 +828,7 @@ class ReasoningChain:
             return str(text)
 
         # Use the existing sanitize_text_input function (defined in _safe_copy_spec context)
+
         def sanitize_text_input_for_reasoning(text: Any, max_length: int = 1000) -> str:
             """SECURE: Sanitize text inputs to prevent injection attacks."""
             if not isinstance(text, str):
@@ -786,29 +838,36 @@ class ReasoningChain:
             text = text[:max_length]
 
             # Remove dangerous characters that could be used for injection
-            sanitized = re.sub(r'[<>"\'`]', '', text)  # Remove HTML/JS injection characters
-            sanitized = re.sub(r'[{}]', '', sanitized)  # Remove template injection characters
+            sanitized = re.sub(r'[<>"\'`]',
+                               '', text)  # Remove HTML / JS injection characters
+            sanitized = re.sub(r'[{}]',
+                               '', sanitized)  # Remove template injection characters
             sanitized = re.sub(r'\${[^}]*}', '', sanitized)  # Remove ${...} patterns
             sanitized = re.sub(r'%[sd]', '', sanitized)      # Remove %s, %d patterns
-            sanitized = re.sub(r'__import__\s*\(', 'BLOCKED', sanitized)  # Block import attempts
-            sanitized = re.sub(r'eval\s*\(', 'BLOCKED', sanitized)      # Block eval attempts
-            sanitized = re.sub(r'exec\s*\(', 'BLOCKED', sanitized)      # Block exec attempts
+            sanitized = re.sub(r'__import__\s*\(',
+                               'BLOCKED', sanitized)  # Block import attempts
+            sanitized = re.sub(r'eval\s*\(',
+                               'BLOCKED', sanitized)      # Block eval attempts
+            sanitized = re.sub(r'exec\s*\(',
+                               'BLOCKED', sanitized)      # Block exec attempts
 
             # CRITICAL FIX: Remove log injection patterns that could poison logs
             # Block common log level patterns that could be used for log injection
-            sanitized = re.sub(r'\[(ERROR|CRITICAL|WARN|WARNING|INFO|DEBUG|TRACE|FATAL)\]', '[LOG_LEVEL_BLOCKED]', sanitized)
+            sanitized = re.sub(r'\[(ERROR | CRITICAL | WARN | WARNING | INFO | DEBUG | TRACE | FATAL)\]', '[LOG_LEVEL_BLOCKED]', sanitized)
 
             # Remove newlines and other control characters that could poison logs
             # CRITICAL FIX: Prevent log injection by normalizing newlines and control chars
-            sanitized = re.sub(r'[\r\n\t]', ' ', sanitized)  # Convert newlines/tabs to spaces
+            sanitized = re.sub(r'[\r\n\t]',
+                               ' ', sanitized)  # Convert newlines / tabs to spaces
             sanitized = re.sub(r'\s+', ' ', sanitized)       # Normalize multiple spaces
 
             # Remove potential ANSI escape sequences that could poison terminal logs
-            sanitized = re.sub(r'\x1b\[[0-9;]*m', '', sanitized)  # Remove ANSI color codes
+            sanitized = re.sub(r'\x1b\[[0 - 9;]*m',
+                               '', sanitized)  # Remove ANSI color codes
 
             return sanitized.strip()
 
-        return sanitize_text_input_for_reasoning(text, max_length=200)
+        return sanitize_text_input_for_reasoning(text, max_length = 200)
 
     def get_summary(self) -> str:
         """
@@ -818,7 +877,7 @@ class ReasoningChain:
         """
         summary_parts = ["Reasoning Chain Summary:"]
         for step in self.steps:
-            # Sanitize all user-provided input to prevent log injection
+            # Sanitize all user - provided input to prevent log injection
             safe_stage = self._sanitize_reasoning_input(step.stage)
             safe_description = self._sanitize_reasoning_input(step.description)
             safe_result = self._sanitize_reasoning_input(step.result)
@@ -848,6 +907,7 @@ class ReasoningChain:
         self._step_counter = 0
 
     @property
+
     def last_result(self) -> Any:
         """
         Returns the result of the last step in the chain, or None if the chain is empty.
@@ -878,7 +938,7 @@ def get_json_schema_type(py_type: Any) -> str:
             # Check if this is Optional[X] (Union[X, None])
             args = py_type.__args__
             if len(args) == 2 and type(None) in args:
-                # This is Optional[X] - get the non-None type
+                # This is Optional[X] - get the non - None type
                 actual_type = args[0] if args[1] is type(None) else args[1]
                 return get_json_schema_type(actual_type)
             # For other Union types, default to string
@@ -911,6 +971,7 @@ def tool_spec(
 
     def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(fn)
+
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             return fn(*args, **kwargs)
 
@@ -985,15 +1046,15 @@ def tool_spec(
                     final_mathematical_basis = mathematical_basis_heuristic
 
         metadata = ToolMetadata(
-            confidence_documentation=confidence_doc,
-            mathematical_basis=final_mathematical_basis,
-            is_mathematical_reasoning=is_mathematical,
-            confidence_formula=confidence_formula,
-            confidence_factors=confidence_factors,
+            confidence_documentation = confidence_doc,
+            mathematical_basis = final_mathematical_basis,
+            is_mathematical_reasoning = is_mathematical,
+            confidence_formula = confidence_formula,
+            confidence_factors = confidence_factors,
             platform_notes={},
         )
 
-        # Thread-safe atomic registry updates with size management
+        # Thread - safe atomic registry updates with size management
         with _registry_lock:
             ENHANCED_TOOL_REGISTRY.append(
                 {"function": wrapper, "tool_spec": tool_specification, "metadata": metadata}

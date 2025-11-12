@@ -22,7 +22,7 @@ def reset_global_state():
     The fixture uses autouse=True so it runs automatically before every test.
     """
     # Reset core module global registries
-    from reasoning_library.tool_registry import ENHANCED_TOOL_REGISTRY, TOOL_REGISTRY
+    from reasoning_library.core import ENHANCED_TOOL_REGISTRY, TOOL_REGISTRY
 
     TOOL_REGISTRY.clear()
     ENHANCED_TOOL_REGISTRY.clear()
@@ -48,7 +48,7 @@ def clean_tool_registry():
 
     Use this fixture explicitly in tests that specifically test tool registration.
     """
-    from reasoning_library.tool_registry import ENHANCED_TOOL_REGISTRY, TOOL_REGISTRY
+    from reasoning_library.core import ENHANCED_TOOL_REGISTRY, TOOL_REGISTRY
 
     # Clear registries
     TOOL_REGISTRY.clear()

@@ -5,11 +5,11 @@ This module provides functions for abductive reasoning (inference to the best ex
 including hypothesis generation and evaluation from observations.
 """
 
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional
 import re
 from collections import defaultdict
 
-from .core import ReasoningChain, ReasoningStep, curry, tool_spec
+from .core import ReasoningChain, curry, tool_spec
 
 
 def _calculate_hypothesis_confidence(
@@ -25,15 +25,19 @@ def _calculate_hypothesis_confidence(
     Args:
         hypothesis (Dict): The hypothesis to evaluate
         total_observations (int): Total number of observations to explain
-        explained_observations (int): Number of observations explained by this hypothesis
+        explained_observations (int): Number of observations explained by this
+            hypothesis
         assumption_count (int): Number of assumptions required
         base_confidence (float): Base confidence level
 
     Returns:
-        float: Confidence score (0.0-1.0)
+        float: Confidence score (0.0 - 1.0)
     """
     # Coverage factor: how many observations are explained
-    coverage_factor = explained_observations / total_observations if total_observations > 0 else 0.0
+    coverage_factor = (
+        explained_observations / total_observations
+        if total_observations > 0 else 0.0
+    )
 
     # Simplicity factor: prefer hypotheses with fewer assumptions (Occam's razor)
     simplicity_factor = 1.0 / (1.0 + 0.2 * assumption_count)
@@ -60,15 +64,15 @@ def _extract_keywords(text: str) -> List[str]:
     # Simple keyword extraction - remove common words and extract meaningful terms
     common_words = {
         'the', 'is', 'at', 'which', 'on', 'a', 'an', 'and', 'or', 'but', 'in', 'with',
-        'to', 'for', 'of', 'as', 'by', 'that', 'this', 'it', 'from', 'are', 'be', 'was',
+        'to', 'for', 'o', 'as', 'by', 'that', 'this', 'it', 'from', 'are', 'be', 'was',
         'were', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
         'could', 'should', 'may', 'might', 'can', 'must', 'shall', 'very', 'really'
     }
 
     # Convert to lowercase and extract words safely without ReDoS vulnerability
     # Fixed pattern prevents catastrophic backtracking by avoiding complex \b boundaries
-    # This is a safer, non-backtracking alternative to r'\b\w+\b'
-    words = re.findall(r'[a-zA-Z0-9]+', text.lower())
+    # This is a safer, non - backtracking alternative to r'\b\w+\b'
+    words = re.findall(r'[a - zA - Z0 - 9]+', text.lower())
 
     # Filter out common words and short words
     keywords = [word for word in words if word not in common_words and len(word) > 2]
@@ -77,7 +81,10 @@ def _extract_keywords(text: str) -> List[str]:
     return list(set(keywords))
 
 
-def _extract_keywords_with_context(observations: List[str], context: Optional[str] = None) -> Dict[str, List[str]]:
+def _extract_keywords_with_context(
+    observations: List[str],
+    context: Optional[str] = None
+) -> Dict[str, List[str]]:
     """
     Extract meaningful phrases with context, not just individual words.
 
@@ -101,8 +108,8 @@ def _extract_keywords_with_context(observations: List[str], context: Optional[st
         if word in ["deploy", "deployment", "update", "restart", "change"]:
             # Look for modifiers like "recent" or "code"
             modifier = ""
-            if i > 0 and words[i-1] in ["recent", "code", "new"]:
-                modifier = words[i-1] + " "
+            if i > 0 and words[i - 1] in ["recent", "code", "new"]:
+                modifier = words[i - 1] + " "
             actions.append(f"{modifier}{word}")
 
     # Component detection
@@ -116,14 +123,14 @@ def _extract_keywords_with_context(observations: List[str], context: Optional[st
     for i, word in enumerate(words):
         if word in ["cpu", "memory", "disk", "network"]:
             # Look for percentage or "at X%"
-            if i + 1 < len(words) and "%" in words[i+1]:
+            if i + 1 < len(words) and "%" in words[i + 1]:
                 issues.append(f"high {word.upper()} usage")
-            elif i > 0 and words[i-1] in ["high", "low"]:
-                issues.append(f"{words[i-1]} {word.upper()}")
+            elif i > 0 and words[i - 1] in ["high", "low"]:
+                issues.append(f"{words[i - 1]} {word.upper()}")
             else:
                 issues.append(f"high {word.upper()} usage")
         elif word in ["slow", "slowly"]:
-            if i > 0 and words[i-1] == "responding":
+            if i > 0 and words[i - 1] == "responding":
                 issues.append("slow response times")
             else:
                 issues.append("performance issues")
@@ -137,7 +144,7 @@ def _extract_keywords_with_context(observations: List[str], context: Optional[st
     }
 
 
-# Domain-specific templates for hypothesis generation
+# Domain - specific templates for hypothesis generation
 # Each domain contains:
 # - keywords: List of keywords that trigger this domain
 # - templates: List of template strings with {action}, {component}, and {issue} placeholders
@@ -147,16 +154,16 @@ DOMAIN_TEMPLATES = {
         "templates": [
             "{action} introduced {issue} in {component}",
             "{component} experiencing {issue} due to {action}",
-            "Performance regression in {component} from {action}",
-            "{component} resource exhaustion caused by {issue}",
+            "Performance regression in {component} from {action} causing {issue}",
+            "{action} causing {component} resource exhaustion due to {issue}",
         ]
     },
     "system": {
         "keywords": ["connection", "network", "timeout", "latency", "load"],
         "templates": [
-            "Network or connection issue affecting {component}",
+            "Network or connection {issue} affecting {component}",
             "Load balancing problem causing {issue} in {component}",
-            "{component} contention due to {action}"
+            "{component} contention due to {action} causing {issue}"
         ]
     }
 }
@@ -196,6 +203,7 @@ def _find_common_themes(observations: List[str]) -> List[str]:
     confidence_formula="base * coverage_factor * simplicity_factor * specificity_factor"
 )
 @curry
+
 def generate_hypotheses(
     observations: List[str],
     reasoning_chain: Optional[ReasoningChain],
@@ -221,7 +229,7 @@ def generate_hypotheses(
                 stage="Abductive Reasoning: Hypothesis Generation",
                 description="No observations provided for hypothesis generation",
                 result=[],
-                confidence=0.0
+                confidence = 0.0
             )
         return []
 
@@ -234,7 +242,7 @@ def generate_hypotheses(
     # Generate different types of hypotheses
     hypotheses = []
 
-    # 1. Single-cause hypothesis (one explanation for all observations)
+    # 1. Single - cause hypothesis (one explanation for all observations)
     if common_themes:
         primary_theme = common_themes[0]
         single_cause = {
@@ -254,7 +262,7 @@ def generate_hypotheses(
         )
         hypotheses.append(single_cause)
 
-    # 2. Multiple-cause hypothesis (different causes for different observations)
+    # 2. Multiple - cause hypothesis (different causes for different observations)
     if len(common_themes) >= 2:
         multiple_causes = {
             "hypothesis": f"Multiple factors are contributing: {', '.join(common_themes[:3])}",
@@ -262,18 +270,19 @@ def generate_hypotheses(
             "confidence": 0.0,  # Will be calculated
             "assumptions": [f"{theme} is a contributing factor" for theme in common_themes[:3]],
             "testable_predictions": [
-                f"Addressing each factor should reduce corresponding observations",
-                f"Combined intervention should have greater effect than individual"
+                "Addressing each factor should reduce corresponding observations",
+                "Combined intervention should have greater effect than individual"
             ],
             "type": "multiple_causes",
             "themes": common_themes[:3]
         }
         multiple_causes["confidence"] = _calculate_hypothesis_confidence(
-            multiple_causes, len(observations), len(observations), len(common_themes[:3])
+            multiple_causes, len(observations),
+                                 len(observations), len(common_themes[:3])
         )
         hypotheses.append(multiple_causes)
 
-    # 3. Temporal/causal chain hypothesis
+    # 3. Temporal / causal chain hypothesis
     if len(observations) >= 2:
         causal_chain = {
             "hypothesis": "The observations represent a causal chain or progression",
@@ -294,7 +303,7 @@ def generate_hypotheses(
         )
         hypotheses.append(causal_chain)
 
-    # 4. Domain-specific template hypotheses (if context provided)
+    # 4. Domain - specific template hypotheses (if context provided)
     if context:
         # Determine domain based on keywords
         domain = None
@@ -312,8 +321,10 @@ def generate_hypotheses(
             for idx, template in enumerate(DOMAIN_TEMPLATES[domain]["templates"][:max_hypotheses]):
                 # Select best keywords for this template
                 action = keywords["actions"][0] if keywords["actions"] else "recent change"
-                component = keywords["components"][min(idx, len(keywords["components"])-1)] if keywords["components"] else "system"
-                issue = keywords["issues"][min(idx, len(keywords["issues"])-1)] if keywords["issues"] else "performance issue"
+                component = keywords["components"][min(idx,
+                                                       len(keywords["components"])-1)] if keywords["components"] else "system"
+                issue = keywords["issues"][min(idx,
+                                               len(keywords["issues"])-1)] if keywords["issues"] else "performance issue"
 
                 # Validate inputs before template formatting
                 if not isinstance(action, str) or len(action.strip()) == 0:
@@ -330,6 +341,7 @@ def generate_hypotheses(
 
                 # SECURE: Sanitize inputs to prevent template injection attacks
                 # Remove any template syntax characters that could break format strings
+
                 def sanitize_template_input(text: str) -> str:
                     """Remove dangerous characters that could be used in template injection."""
                     if not isinstance(text, str):
@@ -348,9 +360,9 @@ def generate_hypotheses(
 
                 # Fill template with sanitized inputs (SECURE: no injection possible)
                 hypothesis_text = template.format(
-                    action=safe_action,
-                    component=safe_component,
-                    issue=safe_issue
+                    action = safe_action,
+                    component = safe_component,
+                    issue = safe_issue
                 )
 
                 # Capitalize first letter
@@ -360,7 +372,7 @@ def generate_hypotheses(
                     "hypothesis": hypothesis_text,
                     "explains": list(range(len(observations))),
                     "confidence": 0.6,
-                    "assumptions": [f"Context '{context}' is relevant to the issue"],
+                    "assumptions": ["Context '{context}' is relevant to the issue"],
                     "testable_predictions": [
                         f"Reverting the {action} should reduce or resolve the {issue}",
                         f"Monitoring {component} metrics should show correlation with the issue"
@@ -384,7 +396,7 @@ def generate_hypotheses(
                     "explains": list(range(len(observations))),
                     "confidence": 0.0,  # Will be calculated
                     "assumptions": [
-                        f"Context is relevant to observations",
+                        "Context is relevant to observations",
                         f"{context_keywords[0]} is a key factor"
                     ],
                     "testable_predictions": [
@@ -406,7 +418,7 @@ def generate_hypotheses(
         "confidence": 0.0,  # Will be calculated
         "assumptions": [
             "Multiple observations share a common root cause",
-            "System-wide factors are at play"
+            "System - wide factors are at play"
         ],
         "testable_predictions": [
             "Addressing the root cause should resolve all observations",
@@ -427,12 +439,15 @@ def generate_hypotheses(
 
     if reasoning_chain:
         reasoning_chain.add_step(
-            stage=stage,
-            description=description,
-            result=hypotheses,
-            confidence=max([h["confidence"] for h in hypotheses]) if hypotheses else 0.0,
-            evidence=f"Generated {len(hypotheses)} hypotheses from {len(observations)} observations",
-            assumptions=["Observations are accurate and relevant", "Generated hypotheses are plausible"]
+            stage = stage,
+            description = description,
+            result = hypotheses,
+            confidence = max([h["confidence"] for h in hypotheses]) if hypotheses else 0.0,
+            evidence = f"Generated {len(hypotheses)} hypotheses from {len(observations)} observations",
+            assumptions=[
+                "Observations are accurate and relevant",
+                "Generated hypotheses are plausible"
+            ]
         )
 
     return hypotheses
@@ -444,6 +459,7 @@ def generate_hypotheses(
     confidence_formula="base * coverage_factor * simplicity_factor * specificity_factor"
 )
 @curry
+
 def rank_hypotheses(
     hypotheses: List[Dict[str, Any]],
     new_evidence: List[str],
@@ -466,7 +482,7 @@ def rank_hypotheses(
                 stage="Abductive Reasoning: Hypothesis Ranking",
                 description="No hypotheses provided for ranking",
                 result=[],
-                confidence=0.0
+                confidence = 0.0
             )
         return []
 
@@ -502,7 +518,8 @@ def rank_hypotheses(
 
         # Update confidence based on evidence
         confidence_multiplier = 1.0 + (0.5 * avg_evidence_support)  # Boost confidence based on evidence
-        updated_hypothesis["confidence"] = min(1.0, hypothesis["confidence"] * confidence_multiplier)
+        updated_hypothesis["confidence"] = min(1.0,
+                                               hypothesis["confidence"] * confidence_multiplier)
 
         # Add evidence to hypothesis
         if "supporting_evidence" not in updated_hypothesis:
@@ -517,17 +534,20 @@ def rank_hypotheses(
 
         updated_hypotheses.append(updated_hypothesis)
 
-    # Re-sort by updated confidence
+    # Re - sort by updated confidence
     updated_hypotheses.sort(key=lambda x: x["confidence"], reverse=True)
 
     if reasoning_chain:
         reasoning_chain.add_step(
-            stage=stage,
-            description=description,
-            result=updated_hypotheses,
-            confidence=max([h["confidence"] for h in updated_hypotheses]) if updated_hypotheses else 0.0,
-            evidence=f"Hypotheses re-ranked based on {len(new_evidence)} pieces of new evidence",
-            assumptions=["New evidence is accurate and relevant", "Evidence evaluation is objective"]
+            stage = stage,
+            description = description,
+            result = updated_hypotheses,
+            confidence = max([h["confidence"] for h in updated_hypotheses]) if updated_hypotheses else 0.0,
+            evidence = f"Hypotheses re - ranked based on {len(new_evidence)} pieces of new evidence",
+            assumptions=[
+                "New evidence is accurate and relevant",
+                "Evidence evaluation is objective"
+            ]
         )
 
     return updated_hypotheses
@@ -539,6 +559,7 @@ def rank_hypotheses(
     confidence_formula="base * coverage_factor * simplicity_factor * specificity_factor"
 )
 @curry
+
 def evaluate_best_explanation(
     hypotheses: List[Dict[str, Any]],
     reasoning_chain: Optional[ReasoningChain],
@@ -558,8 +579,8 @@ def evaluate_best_explanation(
             reasoning_chain.add_step(
                 stage="Abductive Reasoning: Best Explanation Selection",
                 description="No hypotheses provided for evaluation",
-                result=None,
-                confidence=0.0
+                result = None,
+                confidence = 0.0
             )
         return None
 
@@ -579,11 +600,11 @@ def evaluate_best_explanation(
 
     if reasoning_chain:
         reasoning_chain.add_step(
-            stage=stage,
-            description=description,
-            result=best_hypothesis,
-            confidence=best_hypothesis["confidence"],
-            evidence=f"Selected from {len(hypotheses)} hypotheses based on confidence score",
+            stage = stage,
+            description = description,
+            result = best_hypothesis,
+            confidence = best_hypothesis["confidence"],
+            evidence = f"Selected from {len(hypotheses)} hypotheses based on confidence score",
             assumptions=[
                 "Higher confidence indicates better explanation",
                 "All relevant hypotheses were considered"

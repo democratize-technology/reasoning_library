@@ -2,7 +2,7 @@
 Chain of Thought Reasoning Module.
 
 This module provides universal LLM functions for managing conversational reasoning chains
-with thread-safe conversation management and confidence scoring.
+with thread - safe conversation management and confidence scoring.
 """
 
 import re
@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 
 from .core import ReasoningChain, tool_spec
 
-# Thread-safe conversation management with bounded storage
+# Thread - safe conversation management with bounded storage
 _conversations: OrderedDict[str, ReasoningChain] = OrderedDict()
 _conversations_lock = threading.RLock()
 _MAX_CONVERSATIONS = 1000  # Configurable limit to prevent memory DoS
@@ -35,7 +35,8 @@ def _validate_conversation_id(conversation_id: str) -> str:
         raise ValueError("conversation_id must be a string")
     if not re.match(r"\A[a-zA-Z0-9_-]{1,64}\Z", conversation_id):
         raise ValueError(
-            "Invalid conversation_id format. Must be 1-64 alphanumeric characters, underscores, or hyphens."
+            "Invalid conversation_id format. Must be 1-64 alphanumeric characters, "
+          "underscores, or hyphens."
         )
     return conversation_id
 
@@ -46,13 +47,13 @@ def _evict_oldest_conversations_if_needed() -> None:
     Must be called within _conversations_lock context.
     """
     while len(_conversations) >= _MAX_CONVERSATIONS:
-        # Remove the oldest conversation (FIFO/LRU)
-        _conversations.popitem(last=False)
+        # Remove the oldest conversation (FIFO / LRU)
+        _conversations.popitem(last = False)
 
 
 def _get_or_create_conversation(conversation_id: str) -> ReasoningChain:
     """
-    Thread-safe helper to get or create a ReasoningChain for a conversation.
+    Thread - safe helper to get or create a ReasoningChain for a conversation.
 
     NOTE: This function assumes it's called within _conversations_lock context.
     It does NOT acquire the lock itself to prevent nested locking issues.
@@ -77,6 +78,7 @@ def _get_or_create_conversation(conversation_id: str) -> ReasoningChain:
 
 
 @tool_spec
+
 def chain_of_thought_step(
     conversation_id: str,
     stage: str,
@@ -98,7 +100,7 @@ def chain_of_thought_step(
         stage (str): The reasoning stage (e.g., "Analysis", "Synthesis", "Conclusion").
         description (str): Description of the reasoning step.
         result (Any): The result or conclusion of this step.
-        confidence (Optional[float]): Confidence score 0.0-1.0, defaults to 0.8.
+        confidence (Optional[float]): Confidence score 0.0 - 1.0, defaults to 0.8.
         evidence (Optional[str]): Supporting evidence for this step.
         assumptions (Optional[list]): List of assumptions made in this step.
         metadata (Optional[dict]): Additional metadata for this step.
@@ -118,7 +120,7 @@ def chain_of_thought_step(
         }
 
     if confidence is None:
-        confidence = 0.8  # Conservative default for chain-of-thought steps
+        confidence = 0.8  # Conservative default for chain - of - thought steps
 
     # Ensure confidence is within valid range
     confidence = max(0.0, min(1.0, confidence))
@@ -128,13 +130,13 @@ def chain_of_thought_step(
         chain = _get_or_create_conversation(conversation_id)
 
         step = chain.add_step(
-            stage=stage,
-            description=description,
-            result=result,
-            confidence=confidence,
-            evidence=evidence,
-            assumptions=assumptions if assumptions is not None else [],
-            metadata=metadata if metadata is not None else {},
+            stage = stage,
+            description = description,
+            result = result,
+            confidence = confidence,
+            evidence = evidence,
+            assumptions = assumptions if assumptions is not None else [],
+            metadata = metadata if metadata is not None else {},
         )
 
     return {
@@ -146,6 +148,7 @@ def chain_of_thought_step(
 
 
 @tool_spec
+
 def get_chain_summary(conversation_id: str) -> Dict[str, Any]:
     """
     Get a formatted summary of the reasoning chain for a conversation.
@@ -174,7 +177,7 @@ def get_chain_summary(conversation_id: str) -> Dict[str, Any]:
     with _conversations_lock:
         if conversation_id not in _conversations:
             return {
-                "summary": f"No reasoning chain found for conversation '{conversation_id}'.",
+                "summary": "No reasoning chain found for conversation '{conversation_id}'.",
                 "step_count": 0,
                 "overall_confidence": 0.0,
                 "success": False,
@@ -205,6 +208,7 @@ def get_chain_summary(conversation_id: str) -> Dict[str, Any]:
 
 
 @tool_spec
+
 def clear_chain(conversation_id: str) -> Dict[str, Any]:
     """
     Clear the reasoning chain for a specific conversation.
@@ -236,14 +240,14 @@ def clear_chain(conversation_id: str) -> Dict[str, Any]:
             del _conversations[conversation_id]
 
             return {
-                "message": f"Cleared reasoning chain for conversation '{conversation_id}' ({step_count} steps removed).",
+                "message": "Cleared reasoning chain for conversation '{conversation_id}' ({step_count} steps removed).",
                 "conversation_id": conversation_id,
                 "steps_removed": step_count,
                 "success": True,
             }
         else:
             return {
-                "message": f"No reasoning chain found for conversation '{conversation_id}' to clear.",
+                "message": "No reasoning chain found for conversation '{conversation_id}' to clear.",
                 "conversation_id": conversation_id,
                 "steps_removed": 0,
                 "success": False,
