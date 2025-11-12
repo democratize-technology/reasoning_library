@@ -169,6 +169,11 @@ def validate_hypothesis_dict(
     """
     prefix = f"{field_name}[{index}]" if index is not None else field_name
 
+    # Create a confidence validator that includes hypothesis index in error messages
+    def validate_confidence_with_index(confidence: Union[int, float, str, None]) -> float:
+        from .abductive import _validate_confidence_value  # Import from abductive for consistent error messages
+        return _validate_confidence_value(confidence, index)
+
     return validate_dict_schema(
         hypothesis,
         prefix,
@@ -176,7 +181,7 @@ def validate_hypothesis_dict(
         optional_keys=["evidence", "coverage", "simplicity", "specificity"],
         key_types={
             "hypothesis": str,
-            "confidence": (int, float),
+            "confidence": (int, float, str, type(None)),  # Allow str, None so value validator can handle it
             "evidence": str,
             "coverage": (int, float),
             "simplicity": (int, float),
@@ -184,12 +189,12 @@ def validate_hypothesis_dict(
         },
         value_validators={
             "hypothesis": lambda x: x.strip() if isinstance(x, str) else x,
-            "confidence": validate_confidence_value
+            "confidence": validate_confidence_with_index
         }
     )
 
 
-def validate_confidence_value(confidence: Union[int, float]) -> float:
+def validate_confidence_value(confidence: Union[int, float, str, None]) -> float:
     """
     Validate and clamp a confidence value to [0.0, 1.0] range.
 
@@ -203,7 +208,14 @@ def validate_confidence_value(confidence: Union[int, float]) -> float:
         ValidationError: If confidence is not numeric
     """
     if not isinstance(confidence, (int, float)):
-        raise ValidationError(f"Confidence must be numeric, got {type(confidence).__name__}")
+        raise ValidationError(f"Confidence value '{confidence}' must be numeric (int or float), got {type(confidence).__name__}")
+
+    # Check for NaN or infinity
+    if isinstance(confidence, float):
+        if confidence != confidence:  # NaN check
+            raise ValidationError(f"Confidence cannot be NaN")
+        if confidence in (float('inf'), float('-inf')):
+            raise ValidationError(f"Confidence cannot be infinite")
 
     return max(0.0, min(1.0, float(confidence)))
 

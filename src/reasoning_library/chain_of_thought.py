@@ -22,6 +22,9 @@ from .constants import (
     CONFIDENCE_MAX,
 )
 
+# Add alias for tests that expect _MAX_CONVERSATIONS
+_MAX_CONVERSATIONS = MAX_CONVERSATIONS
+
 # Thread - safe conversation management with bounded storage
 _conversations: OrderedDict[str, ReasoningChain] = OrderedDict()
 _conversations_lock = threading.RLock()
@@ -55,7 +58,7 @@ def _evict_oldest_conversations_if_needed() -> None:
     Evict oldest conversations if we exceed the maximum limit.
     Must be called within _conversations_lock context.
     """
-    while len(_conversations) >= MAX_CONVERSATIONS:
+    while len(_conversations) >= _MAX_CONVERSATIONS:
         # Remove the oldest conversation (FIFO / LRU)
         _conversations.popitem(last = False)
 

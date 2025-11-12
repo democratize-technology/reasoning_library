@@ -30,7 +30,7 @@ from reasoning_library.abductive import (
     generate_hypotheses,
 )
 from reasoning_library.inductive import (
-    _validate_sequence_input,
+    _validate_basic_sequence_input,
     _check_arithmetic_progression,
     _check_geometric_progression,
     _add_reasoning_step,
@@ -383,19 +383,19 @@ class TestInductiveReasoningRefactoring:
         sequence = [1.0, 2.0, 3.0]
 
         # Should not raise exception
-        _validate_sequence_input(sequence)
+        _validate_basic_sequence_input(sequence)
 
     def test_validate_sequence_input_invalid_type(self):
         """Test sequence validation with invalid type."""
         with pytest.raises(ValidationError) as exc_info:
-            _validate_sequence_input("not a sequence")
+            _validate_basic_sequence_input("not a sequence")
 
         assert "Expected list/tuple/array" in str(exc_info.value)
 
     def test_validate_sequence_input_empty(self):
         """Test sequence validation with empty sequence."""
         with pytest.raises(ValidationError) as exc_info:
-            _validate_sequence_input([])
+            _validate_basic_sequence_input([])
 
         assert "Sequence cannot be empty" in str(exc_info.value)
 

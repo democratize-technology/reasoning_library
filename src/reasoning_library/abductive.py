@@ -212,8 +212,22 @@ def _extract_keywords(text: str) -> List[str]:
     # Filter out common words and short words
     keywords = [word for word in words if word not in common_words and len(word) > MIN_KEYWORD_LENGTH]
 
-    # Return unique keywords
-    return list(set(keywords))
+    # Prioritize more meaningful keywords by removing less informative ones
+    less_informative = {'about', 'like', 'just', 'then', 'than', 'some', 'more', 'most'}
+    keywords = [word for word in keywords if word not in less_informative]
+
+    # Return unique keywords while preserving some order (longer and earlier words first)
+    unique_keywords = []
+    seen = set()
+    for word in keywords:
+        if word not in seen:
+            seen.add(word)
+            unique_keywords.append(word)
+
+    # Sort by length (longer first) and position, to prioritize more meaningful terms
+    unique_keywords.sort(key=lambda w: (-len(w), keywords.index(w)))
+
+    return unique_keywords[:MAX_TEMPLATE_KEYWORDS]  # Limit to max keywords
 
 
 def _extract_keywords_with_context(
@@ -454,13 +468,22 @@ def _generate_causal_chain_hypothesis(
 
 def _sanitize_template_input(text: str) -> str:
     """
-    Remove dangerous characters that could be used in template injection.
+    SECURE: Remove dangerous characters to prevent template injection attacks.
+
+    This function sanitizes user input before using it in template.format() calls
+    to prevent template injection vulnerabilities that could lead to code execution
+    or information disclosure.
 
     Args:
         text: Input text to sanitize
 
     Returns:
         str: Sanitized text safe for template formatting
+
+    Security:
+        - Removes curly braces {} that could be used for template injection
+        - Strips format string patterns like ${...}
+        - Prevents code execution through malicious template strings
     """
     if not isinstance(text, str):
         return ""
@@ -604,13 +627,19 @@ def _generate_contextual_hypothesis(
             safe_keywords.append(safe_keyword)
 
     # Ensure we don't create overly long hypotheses
-    hypothesis_text = "The observations are related to the context"
     if safe_keywords:
-        keyword_list = ', '.join(safe_keywords)
-        # Limit total hypothesis length
-        hypothesis_text = f"The observations are related to the context: {keyword_list}"
-        if len(hypothesis_text) > HYPOTHESIS_TEXT_HARD_LIMIT:  # Hard limit for contextual hypotheses
-            hypothesis_text = hypothesis_text[:HYPOTHESIS_TEXT_HARD_LIMIT].strip()
+        # Create a more natural hypothesis that incorporates key context terms
+        if len(safe_keywords) >= 2:
+            main_keywords = safe_keywords[:2]  # Use the two most important keywords
+            hypothesis_text = f"The observations may be related to {main_keywords[0]} and {main_keywords[1]} in this context"
+        else:
+            hypothesis_text = f"The observations may be related to {safe_keywords[0]} in this context"
+    else:
+        hypothesis_text = "The observations are related to the context"
+
+    # Limit total hypothesis length
+    if len(hypothesis_text) > HYPOTHESIS_TEXT_HARD_LIMIT:  # Hard limit for contextual hypotheses
+        hypothesis_text = hypothesis_text[:HYPOTHESIS_TEXT_HARD_LIMIT].strip()
 
     context_hypothesis = {
         "hypothesis": hypothesis_text,

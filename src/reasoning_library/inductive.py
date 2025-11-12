@@ -389,9 +389,9 @@ def _calculate_geometric_confidence(
     return min(CONFIDENCE_MAX, max(CONFIDENCE_MIN, confidence))
 
 
-def _validate_sequence_input(sequence: List[float]) -> None:
+def _validate_basic_sequence_input(sequence: List[float]) -> None:
     """
-    Validate sequence input for pattern prediction.
+    Validate basic sequence input for pattern prediction.
 
     Args:
         sequence: Input sequence to validate
@@ -528,7 +528,7 @@ def predict_next_in_sequence(
         ValidationError: If sequence is not a list, tuple, or numpy array or is empty.
     """
     # Input validation
-    _validate_sequence_input(sequence)
+    _validate_basic_sequence_input(sequence)
 
     stage = "Inductive Reasoning: Sequence Prediction"
     description = f"Attempting to predict next number in sequence: {sequence}"

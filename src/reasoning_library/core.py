@@ -900,10 +900,10 @@ class ReasoningChain:
         self._step_counter += 1
 
         # Standardize optional parameters using null handling utilities
+        # Note: evidence is handled separately to preserve None values for test expectations
         normalized_params = handle_optional_params(
             assumptions=assumptions,
-            metadata=metadata,
-            evidence=evidence
+            metadata=metadata
         )
 
         step = ReasoningStep(
@@ -912,7 +912,7 @@ class ReasoningChain:
             description = description,
             result = result,
             confidence = confidence,
-            evidence = normalized_params.get('evidence'),
+            evidence = evidence,  # Preserve None values as per test expectations
             assumptions = normalized_params.get('assumptions', []),
             metadata = normalized_params.get('metadata', {}),
         )

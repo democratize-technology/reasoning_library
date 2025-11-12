@@ -179,7 +179,7 @@ class TestValidateHypothesisDict:
 
     def test_invalid_confidence_type(self):
         """Test that invalid confidence types raise ValidationError."""
-        with pytest.raises(ValidationError, match="must be of type"):
+        with pytest.raises(ValidationError, match="must be numeric"):
             validate_hypothesis_dict(
                 {"hypothesis": "Test", "confidence": "not_numeric"},
                 "test_field"
@@ -226,7 +226,7 @@ class TestValidateConfidenceValue:
 
     def test_invalid_confidence_type(self):
         """Test that invalid confidence types raise ValidationError."""
-        with pytest.raises(ValidationError, match="Confidence must be numeric"):
+        with pytest.raises(ValidationError, match="Confidence value.*must be numeric"):
             validate_confidence_value("not_numeric")
 
 
