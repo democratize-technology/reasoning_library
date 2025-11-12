@@ -130,7 +130,6 @@ def _get_math_detection_cached(func: Callable[...,
     # This prevents false cache hits when Python reuses object IDs
     try:
         import hashlib
-        getattr(func, '__name__', 'unknown')  # TODO: remove unused variable
         func_module = getattr(func, '__module__', 'unknown')
         func_qualname = getattr(func, '__qualname__', 'unknown')
 
@@ -769,7 +768,8 @@ def curry(func: Callable[..., Any]) -> Callable[..., Any]:
     def curried(*args: Any, **kwargs: Any) -> Any:
         try:
             # Try to bind the arguments - this will fail if we don't have enough required args
-            sig.bind(*args, **kwargs)  # TODO: remove unused variable
+            bound_args = sig.bind(*args, **kwargs)
+            bound_args.apply_defaults()
         except TypeError:
             # If binding fails (insufficient args), return a curried function
             return lambda *args2, **kwargs2: curried(
