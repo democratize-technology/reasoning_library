@@ -112,7 +112,7 @@ def _get_math_detection_cached(func: Callable[...,
     # This prevents false cache hits when Python reuses object IDs
     try:
         import hashlib
-        func_name = getattr(func, '__name__', 'unknown')  # TODO: remove unused variable
+        getattr(func, '__name__', 'unknown')  # TODO: remove unused variable
         func_module = getattr(func, '__module__', 'unknown')
         func_qualname = getattr(func, '__qualname__', 'unknown')
 
@@ -441,7 +441,8 @@ def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
         text = text[:max_length]
 
         # Remove dangerous characters that could be used for injection
-        sanitized = re.sub(r'[<>"\'`]', '', text)  # Remove HTML / JS injection characters
+        sanitized = re.sub(r'[<>"\'`]', '', text)
+            # Remove HTML / JS injection characters
         sanitized = re.sub(r'[{}]',
                            '', sanitized)  # Remove template injection characters
         sanitized = re.sub(r'\${[^}]*}', '', sanitized)  # Remove ${...} patterns
@@ -460,7 +461,8 @@ def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
         sanitized = re.sub(r'\s+', ' ', sanitized)       # Normalize multiple spaces
 
         # Remove potential ANSI escape sequences that could poison terminal logs
-        sanitized = re.sub(r'\x1b\[[0 - 9;]*m', '', sanitized)  # Remove ANSI color codes
+        sanitized = re.sub(r'\x1b\[[0 - 9;]*m', '', sanitized)
+            # Remove ANSI color codes
 
         return sanitized.strip()
 
@@ -616,7 +618,8 @@ def _enhance_description_with_confidence_docs(
             return ""
 
         # Remove dangerous characters that could be used for injection
-        sanitized = re.sub(r'[<>"\'`]', '', text)  # Remove HTML / JS injection characters
+        sanitized = re.sub(r'[<>"\'`]', '', text)
+            # Remove HTML / JS injection characters
         sanitized = re.sub(r'[{}]',
                            '', sanitized)  # Remove template injection characters
         sanitized = re.sub(r'\${[^}]*}', '', sanitized)  # Remove ${...} patterns
@@ -645,7 +648,8 @@ def _enhance_description_with_confidence_docs(
     if metadata.confidence_factors:
         # Sanitize each confidence factor
         safe_factors = [sanitize_confidence_text(factor) for factor in metadata.confidence_factors if factor]
-        safe_factors = [factor for factor in safe_factors if factor]  # Remove empty strings
+        safe_factors = [factor for factor in safe_factors if factor]
+            # Remove empty strings
         if safe_factors:
             enhanced_desc += f"\n\nConfidence Scoring: Confidence calculation based on: {', '.join(safe_factors[:5])}"
     elif metadata.confidence_documentation:
@@ -746,7 +750,7 @@ def curry(func: Callable[..., Any]) -> Callable[..., Any]:
     def curried(*args: Any, **kwargs: Any) -> Any:
         try:
             # Try to bind the arguments - this will fail if we don't have enough required args
-            bound = sig.bind(*args, **kwargs)  # TODO: remove unused variable
+            sig.bind(*args, **kwargs)  # TODO: remove unused variable
         except TypeError:
             # If binding fails (insufficient args), return a curried function
             return lambda *args2, **kwargs2: curried(
@@ -853,7 +857,7 @@ class ReasoningChain:
 
             # CRITICAL FIX: Remove log injection patterns that could poison logs
             # Block common log level patterns that could be used for log injection
-            sanitized = re.sub(r'\[(ERROR | CRITICAL | WARN | WARNING | INFO | DEBUG | TRACE | FATAL)\]', '[LOG_LEVEL_BLOCKED]', sanitized)
+            sanitized = re.sub(r'\[(ERROR|CRITICAL|WARN|WARNING|INFO|DEBUG|TRACE|FATAL)\]', '[LOG_LEVEL_BLOCKED]', sanitized)
 
             # Remove newlines and other control characters that could poison logs
             # CRITICAL FIX: Prevent log injection by normalizing newlines and control chars
@@ -862,7 +866,7 @@ class ReasoningChain:
             sanitized = re.sub(r'\s+', ' ', sanitized)       # Normalize multiple spaces
 
             # Remove potential ANSI escape sequences that could poison terminal logs
-            sanitized = re.sub(r'\x1b\[[0 - 9;]*m',
+            sanitized = re.sub(r'\x1b\[[0-9;]*m',
                                '', sanitized)  # Remove ANSI color codes
 
             return sanitized.strip()

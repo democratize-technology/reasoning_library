@@ -1,13 +1,14 @@
 """
 Abductive Reasoning Module.
 
-This module provides functions for abductive reasoning (inference to the best explanation),
+This module provides functions for abductive reasoning
+(inference to the best explanation),
 including hypothesis generation and evaluation from observations.
 """
 
-from typing import Any, Dict, List, Optional
 import re
 from collections import defaultdict
+from typing import Any, Dict, List, Optional
 
 from .core import ReasoningChain, curry, tool_spec
 
@@ -46,7 +47,9 @@ def _calculate_hypothesis_confidence(
     specificity_factor = min(1.0, len(hypothesis.get("testable_predictions", [])) / 3.0)
 
     # Calculate final confidence
-    confidence = base_confidence * coverage_factor * simplicity_factor * specificity_factor
+    confidence = (
+        base_confidence * coverage_factor * simplicity_factor * specificity_factor
+    )
 
     return min(1.0, max(0.0, confidence))
 
@@ -72,7 +75,7 @@ def _extract_keywords(text: str) -> List[str]:
     # Convert to lowercase and extract words safely without ReDoS vulnerability
     # Fixed pattern prevents catastrophic backtracking by avoiding complex \b boundaries
     # This is a safer, non - backtracking alternative to r'\b\w+\b'
-    words = re.findall(r'[a - zA - Z0 - 9]+', text.lower())
+    words = re.findall(r'[a-zA-Z0-9]+', text.lower())
 
     # Filter out common words and short words
     keywords = [word for word in words if word not in common_words and len(word) > 2]
@@ -147,10 +150,13 @@ def _extract_keywords_with_context(
 # Domain - specific templates for hypothesis generation
 # Each domain contains:
 # - keywords: List of keywords that trigger this domain
-# - templates: List of template strings with {action}, {component}, and {issue} placeholders
+# - templates: List of template strings with {action}, {component},
+#   and {issue} placeholders
 DOMAIN_TEMPLATES = {
     "debugging": {
-        "keywords": ["deploy", "code", "server", "database", "cpu", "memory", "slow", "error"],
+        "keywords": [
+            "deploy", "code", "server", "database", "cpu", "memory", "slow", "error"
+        ],
         "templates": [
             "{action} introduced {issue} in {component}",
             "{component} experiencing {issue} due to {action}",
@@ -212,11 +218,13 @@ def generate_hypotheses(
     max_hypotheses: int = 5,
 ) -> List[Dict[str, Any]]:
     """
-    Generate plausible explanatory hypotheses from observations using abductive reasoning.
+    Generate plausible explanatory hypotheses from observations
+    using abductive reasoning.
 
     Args:
         observations (List[str]): List of observations to explain
-        reasoning_chain (Optional[ReasoningChain]): An optional ReasoningChain to add steps to
+        reasoning_chain (Optional[ReasoningChain]): An optional ReasoningChain
+            to add steps to
         context (Optional[str]): Additional context for hypothesis generation
         max_hypotheses (int): Maximum number of hypotheses to generate
 
@@ -265,10 +273,14 @@ def generate_hypotheses(
     # 2. Multiple - cause hypothesis (different causes for different observations)
     if len(common_themes) >= 2:
         multiple_causes = {
-            "hypothesis": f"Multiple factors are contributing: {', '.join(common_themes[:3])}",
+            "hypothesis": (
+                f"Multiple factors are contributing: {', '.join(common_themes[:3])}"
+            ),
             "explains": list(range(len(observations))),
             "confidence": 0.0,  # Will be calculated
-            "assumptions": [f"{theme} is a contributing factor" for theme in common_themes[:3]],
+            "assumptions": [
+                f"{theme} is a contributing factor" for theme in common_themes[:3]
+            ],
             "testable_predictions": [
                 "Addressing each factor should reduce corresponding observations",
                 "Combined intervention should have greater effect than individual"
@@ -318,13 +330,23 @@ def generate_hypotheses(
             keywords = _extract_keywords_with_context(observations, context)
             template_hyps = []
 
-            for idx, template in enumerate(DOMAIN_TEMPLATES[domain]["templates"][:max_hypotheses]):
+            for idx, template in enumerate(
+                DOMAIN_TEMPLATES[domain]["templates"][:max_hypotheses]
+            ):
                 # Select best keywords for this template
-                action = keywords["actions"][0] if keywords["actions"] else "recent change"
-                component = keywords["components"][min(idx,
-                                                       len(keywords["components"])-1)] if keywords["components"] else "system"
-                issue = keywords["issues"][min(idx,
-                                               len(keywords["issues"])-1)] if keywords["issues"] else "performance issue"
+                action = (
+                    keywords["actions"][0] if keywords["actions"] else "recent change"
+                )
+                component = (
+                    keywords["components"][
+                        min(idx, len(keywords["components"]) - 1)
+                    ] if keywords["components"] else "system"
+                )
+                issue = (
+                    keywords["issues"][
+                        min(idx, len(keywords["issues"]) - 1)
+                    ] if keywords["issues"] else "performance issue"
+                )
 
                 # Validate inputs before template formatting
                 if not isinstance(action, str) or len(action.strip()) == 0:
@@ -343,10 +365,12 @@ def generate_hypotheses(
                 # Remove any template syntax characters that could break format strings
 
                 def sanitize_template_input(text: str) -> str:
-                    """Remove dangerous characters that could be used in template injection."""
+                    """Remove dangerous characters that could be used in template injection.
+                    """
                     if not isinstance(text, str):
                         return ""
-                    # Remove curly braces and format specifiers that could break templates
+                    # Remove curly braces and format specifiers that could break
+                    # templates
                     sanitized = re.sub(r'[{}]', '', text)
                     # Remove potential format string injection patterns
                     sanitized = re.sub(r'\${[^}]*}', '', sanitized)  # ${...} patterns
@@ -471,7 +495,8 @@ def rank_hypotheses(
     Args:
         hypotheses (List[Dict]): List of existing hypotheses
         new_evidence (List[str]): New evidence to consider
-        reasoning_chain (Optional[ReasoningChain]): An optional ReasoningChain to add steps to
+        reasoning_chain (Optional[ReasoningChain]): An optional ReasoningChain
+            to add steps to
 
     Returns:
         List[Dict]: Updated hypotheses with adjusted confidence scores
@@ -517,7 +542,8 @@ def rank_hypotheses(
         avg_evidence_support = evidence_support / total_evidence_score if total_evidence_score > 0 else 0.0
 
         # Update confidence based on evidence
-        confidence_multiplier = 1.0 + (0.5 * avg_evidence_support)  # Boost confidence based on evidence
+        confidence_multiplier = 1.0 + (0.5 * avg_evidence_support)
+            # Boost confidence based on evidence
         updated_hypothesis["confidence"] = min(1.0,
                                                hypothesis["confidence"] * confidence_multiplier)
 
@@ -569,7 +595,8 @@ def evaluate_best_explanation(
 
     Args:
         hypotheses (List[Dict]): List of hypotheses to evaluate
-        reasoning_chain (Optional[ReasoningChain]): An optional ReasoningChain to add steps to
+        reasoning_chain (Optional[ReasoningChain]): An optional ReasoningChain
+            to add steps to
 
     Returns:
         Optional[Dict]: The best explanation or None if no hypotheses provided

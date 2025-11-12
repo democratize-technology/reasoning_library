@@ -6,19 +6,18 @@ that demonstrate various input injection attack vectors that must be fixed.
 """
 
 import os
-import sys
-import pytest
 import re
+import sys
+
+import pytest
 
 # Add the src directory to the path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from reasoning_library.core import (
-    _safe_copy_spec,
-    _openai_format,
-    _bedrock_format,
+    ToolMetadata,
     _enhance_description_with_confidence_docs,
-    ToolMetadata
+    _safe_copy_spec,
 )
 
 
@@ -364,7 +363,7 @@ class TestInputInjectionVulnerabilities:
 
         Ensures user input doesn't poison logs through ReasoningChain summary generation.
         """
-        from reasoning_library.core import ReasoningStep, ReasoningChain
+        from reasoning_library.core import ReasoningChain
 
         # Malicious log injection strings that could poison logs if output is logged
         injection_strings = [

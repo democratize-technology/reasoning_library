@@ -2,11 +2,10 @@
 Tests for abductive reasoning module.
 """
 
-import pytest
 from src.reasoning_library.abductive import (
-    generate_hypotheses,
-    _extract_keywords_with_context,
     DOMAIN_TEMPLATES,
+    _extract_keywords_with_context,
+    generate_hypotheses,
 )
 
 

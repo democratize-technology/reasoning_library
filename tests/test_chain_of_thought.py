@@ -5,20 +5,15 @@ Comprehensive test suite for chain_of_thought.py module.
 Tests thread-safe conversation management, confidence scoring,
 validation, and concurrent access patterns.
 """
-import os
 import sys
 import threading
 import time
-from unittest.mock import patch
 
 import pytest
 
 from reasoning_library.chain_of_thought import (
-    _MAX_CONVERSATIONS,
     _conversations,
     _conversations_lock,
-    _evict_oldest_conversations_if_needed,
-    _get_or_create_conversation,
     _validate_conversation_id,
     chain_of_thought_step,
     clear_chain,
@@ -26,7 +21,7 @@ from reasoning_library.chain_of_thought import (
     get_chain_summary,
     get_conversation_stats,
 )
-from reasoning_library.core import ReasoningChain, ReasoningStep
+from reasoning_library.core import ReasoningChain
 
 
 class TestConversationIdValidation:
@@ -671,18 +666,18 @@ def run_all_tests():
                 failed_tests.append(f"{test_class.__name__}.{method_name}: {str(e)}")
                 print(f"  ❌ {method_name}: {str(e)}")
 
-    print(f"\n📊 Test Summary:")
+    print("\n📊 Test Summary:")
     print(f"  Total tests: {total_tests}")
     print(f"  Passed: {passed_tests}")
     print(f"  Failed: {len(failed_tests)}")
 
     if failed_tests:
-        print(f"\n❌ Failed tests:")
+        print("\n❌ Failed tests:")
         for failure in failed_tests:
             print(f"  - {failure}")
         return False
     else:
-        print(f"\n🎉 All chain of thought tests passed!")
+        print("\n🎉 All chain of thought tests passed!")
         return True
 
 

@@ -9,21 +9,20 @@ in the reasoning library's recursive pattern detection functions.
 import os
 import sys
 import time
-import numpy as np
-from typing import List, Dict, Any, Optional
 
 # Add src to path for testing
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from reasoning_library.inductive import (
+    _COMPUTATION_TIMEOUT,
+    _MAX_SEQUENCE_LENGTH,
+    _VALUE_MAGNITUDE_LIMIT,
     detect_fibonacci_pattern,
     detect_lucas_pattern,
-    detect_tribonacci_pattern,
     detect_recursive_pattern,
-    _MAX_SEQUENCE_LENGTH,
-    _COMPUTATION_TIMEOUT,
-    _VALUE_MAGNITUDE_LIMIT
+    detect_tribonacci_pattern,
 )
+
 
 def test_input_size_validation_protection() -> bool:
     """Test that input size validation prevents DoS attacks."""
@@ -39,7 +38,7 @@ def test_input_size_validation_protection() -> bool:
         return False
     except ValueError as e:
         if "Input sequence too large" in str(e):
-            print(f"    ✅ PASS: Correctly rejected oversized sequence")
+            print("    ✅ PASS: Correctly rejected oversized sequence")
         else:
             print(f"    ❌ FAIL: Wrong error message: {e}")
             return False
@@ -64,7 +63,7 @@ def test_input_size_validation_protection() -> bool:
             print(f"    ❌ FAIL: Should not overflow with reasonable sequence: {e}")
             return False
         else:
-            print(f"    ✅ PASS: No overflow with reasonable sequence (no pattern detected is okay)")
+            print("    ✅ PASS: No overflow with reasonable sequence (no pattern detected is okay)")
 
     return True
 
@@ -78,11 +77,11 @@ def test_value_magnitude_validation_protection() -> bool:
 
     try:
         result = detect_fibonacci_pattern(large_value_sequence)
-        print(f"    ❌ FAIL: Should have rejected large values")
+        print("    ❌ FAIL: Should have rejected large values")
         return False
     except ValueError as e:
         if "Value magnitude too large" in str(e):
-            print(f"    ✅ PASS: Correctly rejected large values")
+            print("    ✅ PASS: Correctly rejected large values")
         else:
             print(f"    ❌ FAIL: Wrong error message: {e}")
             return False
@@ -96,11 +95,11 @@ def test_value_magnitude_validation_protection() -> bool:
 
     try:
         result = detect_fibonacci_pattern(large_negative_sequence)
-        print(f"    ❌ FAIL: Should have rejected large negative values")
+        print("    ❌ FAIL: Should have rejected large negative values")
         return False
     except ValueError as e:
         if "Value magnitude too large" in str(e):
-            print(f"    ✅ PASS: Correctly rejected large negative values")
+            print("    ✅ PASS: Correctly rejected large negative values")
         else:
             print(f"    ❌ FAIL: Wrong error message: {e}")
             return False
@@ -133,7 +132,7 @@ def test_value_magnitude_validation_protection() -> bool:
             print(f"    ❌ FAIL: Unexpected exception for {seq}: {e}")
             return False
 
-    print(f"    ✅ PASS: Correctly rejected all invalid value sequences")
+    print("    ✅ PASS: Correctly rejected all invalid value sequences")
     return True
 
 def test_computation_timeout_protection() -> bool:
@@ -209,11 +208,11 @@ def test_all_functions_protection() -> bool:
     # Test detect_recursive_pattern
     try:
         result = detect_recursive_pattern(attack_sequence, None)
-        print(f"    ❌ FAIL: detect_recursive_pattern should have rejected attack sequence")
+        print("    ❌ FAIL: detect_recursive_pattern should have rejected attack sequence")
         return False
     except ValueError as e:
         if "Value magnitude too large" in str(e):
-            print(f"    ✅ PASS: detect_recursive_pattern correctly protected")
+            print("    ✅ PASS: detect_recursive_pattern correctly protected")
         else:
             print(f"    ❌ FAIL: detect_recursive_pattern wrong error: {e}")
             return False
@@ -234,9 +233,9 @@ def test_legitimate_usage_still_works() -> bool:
     try:
         result = detect_fibonacci_pattern(fibonacci_seq)
         if result and result["type"] == "fibonacci":
-            print(f"    ✅ PASS: Correctly detected Fibonacci pattern")
+            print("    ✅ PASS: Correctly detected Fibonacci pattern")
         else:
-            print(f"    ❌ FAIL: Failed to detect Fibonacci pattern")
+            print("    ❌ FAIL: Failed to detect Fibonacci pattern")
             return False
     except Exception as e:
         print(f"    ❌ FAIL: Exception with legitimate Fibonacci: {e}")
@@ -249,9 +248,9 @@ def test_legitimate_usage_still_works() -> bool:
     try:
         result = detect_lucas_pattern(lucas_seq)
         if result and "lucas" in result["type"]:
-            print(f"    ✅ PASS: Correctly detected Lucas pattern")
+            print("    ✅ PASS: Correctly detected Lucas pattern")
         else:
-            print(f"    ❌ FAIL: Failed to detect Lucas pattern")
+            print("    ❌ FAIL: Failed to detect Lucas pattern")
             return False
     except Exception as e:
         print(f"    ❌ FAIL: Exception with legitimate Lucas: {e}")
@@ -264,9 +263,9 @@ def test_legitimate_usage_still_works() -> bool:
     try:
         result = detect_tribonacci_pattern(tribonacci_seq)
         if result and result["type"] == "tribonacci":
-            print(f"    ✅ PASS: Correctly detected Tribonacci pattern")
+            print("    ✅ PASS: Correctly detected Tribonacci pattern")
         else:
-            print(f"    ❌ FAIL: Failed to detect Tribonacci pattern")
+            print("    ❌ FAIL: Failed to detect Tribonacci pattern")
             return False
     except Exception as e:
         print(f"    ❌ FAIL: Exception with legitimate Tribonacci: {e}")
@@ -277,9 +276,9 @@ def test_legitimate_usage_still_works() -> bool:
     try:
         result = detect_recursive_pattern(fibonacci_seq, None)
         if result and "fibonacci" in result.get("type", ""):
-            print(f"    ✅ PASS: detect_recursive_pattern works correctly")
+            print("    ✅ PASS: detect_recursive_pattern works correctly")
         else:
-            print(f"    ❌ FAIL: detect_recursive_pattern failed")
+            print("    ❌ FAIL: detect_recursive_pattern failed")
             return False
     except Exception as e:
         print(f"    ❌ FAIL: Exception with detect_recursive_pattern: {e}")

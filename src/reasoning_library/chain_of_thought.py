@@ -1,8 +1,9 @@
 """
 Chain of Thought Reasoning Module.
 
-This module provides universal LLM functions for managing conversational reasoning chains
-with thread - safe conversation management and confidence scoring.
+This module provides universal LLM functions for managing
+conversational reasoning chains with thread-safe conversation
+management and confidence scoring.
 """
 
 import re
@@ -177,7 +178,9 @@ def get_chain_summary(conversation_id: str) -> Dict[str, Any]:
     with _conversations_lock:
         if conversation_id not in _conversations:
             return {
-                "summary": "No reasoning chain found for conversation '{conversation_id}'.",
+                "summary": (
+                    f"No reasoning chain found for conversation '{conversation_id}'."
+                ),
                 "step_count": 0,
                 "overall_confidence": 0.0,
                 "success": False,
@@ -240,14 +243,20 @@ def clear_chain(conversation_id: str) -> Dict[str, Any]:
             del _conversations[conversation_id]
 
             return {
-                "message": "Cleared reasoning chain for conversation '{conversation_id}' ({step_count} steps removed).",
+                "message": (
+                    f"Cleared reasoning chain for conversation '{conversation_id}' "
+                    f"({step_count} steps removed)."
+                ),
                 "conversation_id": conversation_id,
                 "steps_removed": step_count,
                 "success": True,
             }
         else:
             return {
-                "message": "No reasoning chain found for conversation '{conversation_id}' to clear.",
+                "message": (
+                    f"No reasoning chain found for conversation "
+                    f"'{conversation_id}' to clear."
+                ),
                 "conversation_id": conversation_id,
                 "steps_removed": 0,
                 "success": False,

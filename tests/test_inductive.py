@@ -5,9 +5,8 @@ Comprehensive test suite for inductive.py module.
 Tests pattern recognition, confidence scoring, numpy dependency handling,
 edge cases, and statistical analysis functionality.
 """
-import os
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -20,7 +19,7 @@ except ImportError:
     NUMPY_AVAILABLE = False
     print("⚠️  NumPy not available - some tests will be skipped")
 
-from reasoning_library.core import ReasoningChain, ReasoningStep
+from reasoning_library.core import ReasoningChain
 from reasoning_library.inductive import (
     _assess_data_sufficiency,
     _calculate_arithmetic_confidence,
@@ -522,19 +521,19 @@ def run_all_tests():
                 failed_tests.append(f"{test_class.__name__}.{method_name}: {str(e)}")
                 print(f"  ❌ {method_name}: {str(e)}")
 
-    print(f"\n📊 Test Summary:")
+    print("\n📊 Test Summary:")
     print(f"  Total tests: {total_tests}")
     print(f"  Passed: {passed_tests}")
     print(f"  Skipped: {skipped_tests}")
     print(f"  Failed: {len(failed_tests)}")
 
     if failed_tests:
-        print(f"\n❌ Failed tests:")
+        print("\n❌ Failed tests:")
         for failure in failed_tests:
             print(f"  - {failure}")
         return False
     else:
-        print(f"\n🎉 All inductive reasoning tests passed!")
+        print("\n🎉 All inductive reasoning tests passed!")
         if skipped_tests > 0:
             print(
                 f"   (Note: {skipped_tests} tests were skipped due to missing dependencies)"

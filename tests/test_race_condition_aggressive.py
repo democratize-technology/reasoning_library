@@ -6,22 +6,22 @@ This test directly demonstrates the specific race condition vulnerabilities
 in the reasoning_library core module by accessing unsynchronized shared state.
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 import threading
 import time
-import weakref
-from concurrent.futures import ThreadPoolExecutor
+
 from reasoning_library.core import (
-    _math_detection_cache,
-    _function_source_cache,
     ENHANCED_TOOL_REGISTRY,
     TOOL_REGISTRY,
-    _get_math_detection_cached,
+    _function_source_cache,
     _get_function_source_cached,
-    tool_spec
+    _get_math_detection_cached,
+    _math_detection_cache,
+    tool_spec,
 )
 
 

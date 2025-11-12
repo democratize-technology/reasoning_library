@@ -4,10 +4,10 @@ Direct ReDoS vulnerability test that specifically targets the vulnerable regex p
 This creates a true catastrophic backtracking scenario.
 """
 
-import time
+import os
 import re
 import sys
-import os
+import time
 
 # Add src to path for import
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))

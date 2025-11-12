@@ -4,10 +4,10 @@ Comprehensive ReDoS vulnerability test suite for _extract_keywords function.
 Tests both the fix effectiveness and functional correctness.
 """
 
-import time
-import sys
 import os
 import re
+import sys
+import time
 
 # Add src to path for import
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -52,7 +52,7 @@ def test_redos_vulnerability_fix():
             print(f"  Keywords found: {len(result)}")
 
             if duration <= max_time_per_test:
-                print(f"  ✅ PASS")
+                print("  ✅ PASS")
                 passed += 1
             else:
                 print(f"  ❌ FAIL: Too slow ({duration:.4f}s > {max_time_per_test}s)")
@@ -139,7 +139,7 @@ def test_functional_correctness():
                 print(f"  ⚠️  WARNING: Unexpected keywords: {unexpected}")
                 passed += 1  # Warning, not failure
             else:
-                print(f"  ✅ PASS")
+                print("  ✅ PASS")
                 passed += 1
 
         except Exception as e:

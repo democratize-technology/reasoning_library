@@ -11,25 +11,26 @@ Measures concrete performance gains and validates correctness.
 Run with: uv run python validate_optimizations.py
 """
 
-import time
+import os
 import statistics
-import numpy as np
-from typing import List, Callable, Any, Dict
 
 # Import the library functions
 import sys
-import os
+import time
+from typing import Callable, Dict
+
+import numpy as np
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from reasoning_library.core import (
     _detect_mathematical_reasoning,
     _detect_mathematical_reasoning_uncached,
-    clear_performance_caches
+    clear_performance_caches,
 )
 from reasoning_library.inductive import (
     _calculate_pattern_quality_score_optimized,
     _calculate_pattern_quality_score_original,
-    predict_next_in_sequence
 )
 
 
@@ -153,13 +154,13 @@ class OptimizationValidator:
         simple_improvement = (uncached_simple["mean_ms"] - cached_simple_hot["mean_ms"]) / uncached_simple["mean_ms"] * 100
         complex_improvement = (uncached_complex["mean_ms"] - cached_complex_hot["mean_ms"]) / uncached_complex["mean_ms"] * 100
 
-        print(f"📊 REGEX OPTIMIZATION RESULTS:")
-        print(f"├── Simple Function:")
+        print("📊 REGEX OPTIMIZATION RESULTS:")
+        print("├── Simple Function:")
         print(f"│   ├── Uncached: {uncached_simple['mean_ms']:.2f}ms ± {uncached_simple['std_ms']:.2f}ms")
         print(f"│   ├── Cached (Hot): {cached_simple_hot['mean_ms']:.2f}ms ± {cached_simple_hot['std_ms']:.2f}ms")
         print(f"│   └── Improvement: {simple_improvement:.1f}% faster")
-        print(f"│")
-        print(f"├── Complex Function:")
+        print("│")
+        print("├── Complex Function:")
         print(f"│   ├── Uncached: {uncached_complex['mean_ms']:.2f}ms ± {uncached_complex['std_ms']:.2f}ms")
         print(f"│   ├── Cached (Hot): {cached_complex_hot['mean_ms']:.2f}ms ± {cached_complex_hot['std_ms']:.2f}ms")
         print(f"│   └── Improvement: {complex_improvement:.1f}% faster")
@@ -167,7 +168,7 @@ class OptimizationValidator:
         # Target validation
         target_met = complex_improvement >= 80  # Target was 80% improvement
         status = "✅ TARGET MET" if target_met else "❌ TARGET MISSED"
-        print(f"│")
+        print("│")
         print(f"└── {status} (Target: 80% improvement)")
 
         self.results['regex_optimization'] = {
@@ -234,11 +235,11 @@ class OptimizationValidator:
             perfect_improvement = (original_perfect["mean_ms"] - optimized_perfect["mean_ms"]) / original_perfect["mean_ms"] * 100
             noisy_improvement = (original_noisy["mean_ms"] - optimized_noisy["mean_ms"]) / original_noisy["mean_ms"] * 100
 
-            print(f"├── Perfect Pattern:")
+            print("├── Perfect Pattern:")
             print(f"│   ├── Original: {original_perfect['mean_ms']:.3f}ms")
             print(f"│   ├── Optimized: {optimized_perfect['mean_ms']:.3f}ms")
             print(f"│   └── Improvement: {perfect_improvement:.1f}%")
-            print(f"├── Noisy Pattern:")
+            print("├── Noisy Pattern:")
             print(f"│   ├── Original: {original_noisy['mean_ms']:.3f}ms")
             print(f"│   ├── Optimized: {optimized_noisy['mean_ms']:.3f}ms")
             print(f"│   └── Improvement: {noisy_improvement:.1f}%")
@@ -320,54 +321,54 @@ class OptimizationValidator:
         regex_improvement = regex_results.get('improvement_percent', 0)
         regex_target_met = regex_results.get('target_met', False)
 
-        print(f"\n🥷 NINJA LEVEL RESULTS:")
+        print("\n🥷 NINJA LEVEL RESULTS:")
         print(f"├── Regex Optimization: {regex_improvement:.1f}% improvement")
         print(f"├── Target (80%): {'✅ MET' if regex_target_met else '❌ MISSED'}")
         if regex_target_met:
-            print(f"├── Status: Massive success! Function detection significantly faster")
+            print("├── Status: Massive success! Function detection significantly faster")
             original_time = regex_results.get('uncached_complex', {}).get('mean_ms', 0)
             optimized_time = regex_results.get('cached_hot_complex', {}).get('mean_ms', 0)
             print(f"└── Concrete gain: {original_time:.2f}ms → {optimized_time:.2f}ms per function")
         else:
-            print(f"└── Status: Partial success, but room for improvement")
+            print("└── Status: Partial success, but room for improvement")
 
         # NumPy optimization summary
         large_seq_results = self.results.get('numpy_optimization_1000', {})
         if large_seq_results:
             perfect_improvement = large_seq_results.get('perfect_improvement', 0)
-            print(f"\n⚔️ SAMURAI LEVEL RESULTS:")
+            print("\n⚔️ SAMURAI LEVEL RESULTS:")
             print(f"├── NumPy Optimization: {perfect_improvement:.1f}% improvement for perfect patterns")
             print(f"├── Early Exit Working: {'✅ YES' if perfect_improvement > 30 else '❌ NO'}")
-            print(f"└── Large Sequence Handling: Optimized for sequences >100 elements")
+            print("└── Large Sequence Handling: Optimized for sequences >100 elements")
 
         # Correctness validation
         correctness = self.results.get('correctness', {})
         correctness_passed = correctness.get('passed', False)
         test_count = correctness.get('test_cases', 0)
 
-        print(f"\n🔍 CORRECTNESS VALIDATION:")
+        print("\n🔍 CORRECTNESS VALIDATION:")
         print(f"├── All Tests Passed: {'✅ YES' if correctness_passed else '❌ NO'}")
         print(f"├── Test Cases: {test_count}")
         print(f"└── Mathematical Accuracy: {'✅ PRESERVED' if correctness_passed else '❌ COMPROMISED'}")
 
         # Overall assessment
         overall_success = regex_target_met and correctness_passed
-        print(f"\n🏆 OVERALL ASSESSMENT:")
+        print("\n🏆 OVERALL ASSESSMENT:")
         if overall_success:
-            print(f"├── Status: ✅ OPTIMIZATION SUCCESS")
-            print(f"├── Performance: Significant improvements achieved")
-            print(f"├── Correctness: Mathematical accuracy preserved")
-            print(f"└── Recommendation: Deploy to production")
+            print("├── Status: ✅ OPTIMIZATION SUCCESS")
+            print("├── Performance: Significant improvements achieved")
+            print("├── Correctness: Mathematical accuracy preserved")
+            print("└── Recommendation: Deploy to production")
         else:
-            print(f"├── Status: ⚠️ PARTIAL SUCCESS")
+            print("├── Status: ⚠️ PARTIAL SUCCESS")
             print(f"├── Issues: {'Correctness' if not correctness_passed else 'Performance targets'}")
             print(f"└── Recommendation: {'Fix correctness issues' if not correctness_passed else 'Further optimization needed'}")
 
-        print(f"\n📋 NEXT STEPS:")
-        print(f"├── Add to CI/CD pipeline for regression testing")
-        print(f"├── Monitor production performance metrics")
-        print(f"├── Consider GODZILLA-level optimizations for 10x gains")
-        print(f"└── Implement async conversion for I/O-bound operations")
+        print("\n📋 NEXT STEPS:")
+        print("├── Add to CI/CD pipeline for regression testing")
+        print("├── Monitor production performance metrics")
+        print("├── Consider GODZILLA-level optimizations for 10x gains")
+        print("└── Implement async conversion for I/O-bound operations")
 
 
 def main():

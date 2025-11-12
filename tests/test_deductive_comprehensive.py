@@ -5,13 +5,11 @@ Comprehensive test suite for deductive.py module.
 Expands beyond the basic test_deductive_only.py to cover all logical operations,
 edge cases, error conditions, currying functionality, and confidence scoring.
 """
-import os
 import sys
-from unittest.mock import MagicMock
 
 import pytest
 
-from reasoning_library.core import ReasoningChain, ReasoningStep
+from reasoning_library.core import ReasoningChain
 from reasoning_library.deductive import (
     apply_modus_ponens,
     chain_deductions,
@@ -525,18 +523,18 @@ def run_all_tests():
                 failed_tests.append(f"{test_class.__name__}.{method_name}: {str(e)}")
                 print(f"  ❌ {method_name}: {str(e)}")
 
-    print(f"\n📊 Test Summary:")
+    print("\n📊 Test Summary:")
     print(f"  Total tests: {total_tests}")
     print(f"  Passed: {passed_tests}")
     print(f"  Failed: {len(failed_tests)}")
 
     if failed_tests:
-        print(f"\n❌ Failed tests:")
+        print("\n❌ Failed tests:")
         for failure in failed_tests:
             print(f"  - {failure}")
         return False
     else:
-        print(f"\n🎉 All deductive reasoning tests passed!")
+        print("\n🎉 All deductive reasoning tests passed!")
         return True
 
 

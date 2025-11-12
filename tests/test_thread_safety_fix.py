@@ -6,27 +6,27 @@ This test verifies that the race condition fixes in reasoning_library are effect
 The test should PASS after the fixes, demonstrating that race conditions have been resolved.
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 import threading
 import time
-import weakref
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
 from reasoning_library.core import (
-    _math_detection_cache,
-    _function_source_cache,
-    ENHANCED_TOOL_REGISTRY,
     TOOL_REGISTRY,
-    _get_math_detection_cached,
+    _function_source_cache,
     _get_function_source_cached,
+    _get_math_detection_cached,
+    _math_detection_cache,
     clear_performance_caches,
-    get_tool_specs,
-    get_openai_tools,
     get_bedrock_tools,
     get_enhanced_tool_registry,
-    tool_spec
+    get_openai_tools,
+    get_tool_specs,
+    tool_spec,
 )
 
 

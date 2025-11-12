@@ -5,11 +5,9 @@ Comprehensive test suite for core.py module.
 Tests ReasoningChain, ReasoningStep, tool registry, security features,
 and mathematical reasoning detection.
 """
-import os
 import sys
 import threading
 import time
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -20,20 +18,14 @@ from reasoning_library.core import (
     FACTOR_PATTERN,
     MAX_SOURCE_CODE_SIZE,
     TOOL_REGISTRY,
-    TYPE_MAP,
     ReasoningChain,
     ReasoningStep,
-    ToolMetadata,
-    _bedrock_format,
     _detect_mathematical_reasoning,
-    _openai_format,
     _safe_copy_spec,
     curry,
     get_bedrock_tools,
-    get_enhanced_tool_registry,
     get_json_schema_type,
     get_openai_tools,
-    get_tool_specs,
     tool_spec,
 )
 
@@ -272,7 +264,6 @@ class TestSecurityFeatures:
 
     def test_safe_copy_spec_basic(self):
         """Test safe copying of tool specifications."""
-        from reasoning_library.core import _safe_copy_spec
 
         tool_spec = {
             "type": "function",
@@ -292,7 +283,6 @@ class TestSecurityFeatures:
 
     def test_safe_copy_spec_filters_dangerous_keys(self):
         """Test that safe copy filters out non-whitelisted keys."""
-        from reasoning_library.core import _safe_copy_spec
 
         dangerous_spec = {
             "type": "function",
@@ -318,7 +308,6 @@ class TestSecurityFeatures:
 
     def test_safe_copy_spec_validation(self):
         """Test input validation in safe copy."""
-        from reasoning_library.core import _safe_copy_spec
 
         # Test invalid inputs
         with pytest.raises(ValueError, match="Tool specification must be a dictionary"):
@@ -353,7 +342,6 @@ class TestMathematicalReasoningDetection:
 
     def test_detect_mathematical_reasoning_positive(self):
         """Test detection of mathematical reasoning functions."""
-        from reasoning_library.core import _detect_mathematical_reasoning
 
         def math_func():
             """Function with confidence calculation based on pattern quality."""
@@ -368,7 +356,6 @@ class TestMathematicalReasoningDetection:
 
     def test_detect_mathematical_reasoning_negative(self):
         """Test non-mathematical functions are not detected."""
-        from reasoning_library.core import _detect_mathematical_reasoning
 
         def regular_func():
             """A regular function that does basic string operations."""
@@ -382,7 +369,6 @@ class TestMathematicalReasoningDetection:
 
     def test_detect_mathematical_reasoning_with_modus_ponens(self):
         """Test detection of modus ponens functions."""
-        from reasoning_library.core import _detect_mathematical_reasoning
 
         def modus_ponens_func():
             """Applies modus ponens reasoning rule."""
@@ -568,7 +554,6 @@ class TestEdgeCases:
 
     def test_very_long_source_code_handling(self):
         """Test handling of very long source code for ReDoS protection."""
-        from reasoning_library.core import _detect_mathematical_reasoning
 
         # Create a function with extremely long source code (SAFE: no exec() usage)
         def create_long_source_func():
@@ -647,18 +632,18 @@ def run_all_tests():
                 print(f"  ❌ {method_name}: {str(e)}")
 
     # Print summary
-    print(f"\n📊 Test Summary:")
+    print("\n📊 Test Summary:")
     print(f"  Total tests: {total_tests}")
     print(f"  Passed: {passed_tests}")
     print(f"  Failed: {len(failed_tests)}")
 
     if failed_tests:
-        print(f"\n❌ Failed tests:")
+        print("\n❌ Failed tests:")
         for failure in failed_tests:
             print(f"  - {failure}")
         return False
     else:
-        print(f"\n🎉 All tests passed!")
+        print("\n🎉 All tests passed!")
         return True
 
 

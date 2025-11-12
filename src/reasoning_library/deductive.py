@@ -157,7 +157,8 @@ def check_modus_ponens_premises_with_confidence(p: bool, q: bool) -> Tuple[bool,
     if not isinstance(q, bool):
         raise TypeError(f"Expected bool for q, got {type(q).__name__}")
     result = logical_and(implies(p, q), p)
-    # For modus ponens premises: confidence is always 1.0 since it's a deterministic logical check
+    # For modus ponens premises: confidence is always 1.0 since it's a
+    # deterministic logical check
     return result, 1.0
 
 
@@ -178,7 +179,8 @@ def apply_modus_ponens(
     Args:
         p_is_true (bool): The truth value of proposition P.
         p_implies_q_is_true (bool): The truth value of the implication (P -> Q).
-        reasoning_chain (Optional[ReasoningChain]): An optional ReasoningChain to record the step.
+        reasoning_chain (Optional[ReasoningChain]): An optional ReasoningChain
+        to record the step.
 
     Returns:
         Optional[bool]: The conclusion (True) if deduced, otherwise None.
@@ -226,15 +228,18 @@ def chain_deductions(
     reasoning_chain: ReasoningChain, *functions: Callable[[Any], Any]
 ) -> Callable[[Any], Any]:
     """
-    Composes multiple deductive functions into a single chain, adding steps to the provided ReasoningChain.
+    Composes multiple deductive functions into a single chain, adding steps to
+    the provided ReasoningChain.
     Each function in the chain takes the output of the previous one as input.
     """
 
     def composed_function(initial_input: Any) -> Any:
         result = initial_input
         for i, func in enumerate(functions):
-            # Each function in the chain is expected to return a result that can be passed to the next.
-            # If the function itself adds to the chain, it should handle that internally.
+            # Each function in the chain is expected to return a result that can be
+            # passed
+            # to the next. If the function itself adds to the chain, it should handle
+            # that internally.
             # If a function returns None, it means deduction failed at that step.
             result = func(result)
             if result is None:  # If any step fails to deduce, the chain breaks

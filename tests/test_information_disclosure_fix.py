@@ -4,14 +4,18 @@ Verification test for the information disclosure fix in code inspection.
 This test ensures the fix works and prevents source code exposure.
 """
 
-import sys
 import os
+import sys
 import tempfile
 
 # Add src to path for import
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from reasoning_library.core import _get_function_source_cached, tool_spec, clear_performance_caches
+from reasoning_library.core import (
+    _get_function_source_cached,
+    clear_performance_caches,
+    tool_spec,
+)
 
 
 def test_source_code_inspection_blocked():
@@ -220,7 +224,7 @@ def test_clear_caches_still_works():
             print(f"   Cache clear stats: {cleared_stats}")
             return True
         else:
-            print(f"❌ FAIL: Cache clearing broke functionality")
+            print("❌ FAIL: Cache clearing broke functionality")
             return False
 
     except Exception as e:

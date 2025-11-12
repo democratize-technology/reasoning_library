@@ -9,10 +9,11 @@ __version__ = "0.2.1"
 
 from typing import Any, Dict, List
 
-from .core import get_bedrock_tools  # AWS Bedrock Converse API format
-from .core import get_openai_tools  # OpenAI ChatCompletions API format
-from .core import get_tool_specs  # Legacy format for backward compatibility
-
+from .core import (
+    get_bedrock_tools,  # AWS Bedrock Converse API format
+    get_openai_tools,  # OpenAI ChatCompletions API format
+    get_tool_specs,  # Legacy format for backward compatibility
+)
 
 # Pre - populated lists for easy integration
 # Note: These are populated dynamically when modules are imported

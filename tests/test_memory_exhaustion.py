@@ -4,12 +4,11 @@ Test for memory exhaustion vulnerability through unbounded cache pollution.
 This test demonstrates the vulnerability and verifies the fix.
 """
 
-import sys
-import os
 import gc
-import time
+import os
+import sys
+
 import psutil
-import weakref
 
 # Add src to path for import
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -18,7 +17,7 @@ from reasoning_library.core import (
     ENHANCED_TOOL_REGISTRY,
     TOOL_REGISTRY,
     clear_performance_caches,
-    tool_spec
+    tool_spec,
 )
 
 
@@ -73,13 +72,13 @@ def test_unbounded_registry_growth():
 
                 # Fail test if memory growth is excessive (>50MB for 1000 functions)
                 if memory_increase > 50:
-                    print(f"❌ FAIL: Excessive memory growth detected!")
+                    print("❌ FAIL: Excessive memory growth detected!")
                     print(f"   Memory increased by {memory_increase:.2f} MB for {i} functions")
                     return False
 
                 # Check that registries are growing unbounded (this is the vulnerability)
                 if len(ENHANCED_TOOL_REGISTRY) != len(TOOL_REGISTRY):
-                    print(f"❌ FAIL: Registry sizes don't match!")
+                    print("❌ FAIL: Registry sizes don't match!")
                     print(f"   ENHANCED_TOOL_REGISTRY: {len(ENHANCED_TOOL_REGISTRY)}")
                     print(f"   TOOL_REGISTRY: {len(TOOL_REGISTRY)}")
                     return False
@@ -87,7 +86,7 @@ def test_unbounded_registry_growth():
         final_memory = get_memory_usage()
         memory_increase = final_memory - initial_memory
 
-        print(f"\nFinal results after creating 1000 functions:")
+        print("\nFinal results after creating 1000 functions:")
         print(f"  ENHANCED_TOOL_REGISTRY: {len(ENHANCED_TOOL_REGISTRY)} entries")
         print(f"  TOOL_REGISTRY: {len(TOOL_REGISTRY)} entries")
         print(f"  Total memory increase: {memory_increase:.2f} MB")
@@ -98,7 +97,7 @@ def test_unbounded_registry_growth():
             print("🚨 Each function creates 2 registry entries with no cleanup mechanism")
             return True
         else:
-            print(f"❌ FAIL: Unexpected registry sizes")
+            print("❌ FAIL: Unexpected registry sizes")
             return False
 
     except Exception as e:
@@ -161,7 +160,7 @@ def test_memory_exhaustion_attack():
         final_memory = get_memory_usage()
         final_increase = final_memory - initial_memory
 
-        print(f"\nAttack results:")
+        print("\nAttack results:")
         print(f"  Final registry size: {len(ENHANCED_TOOL_REGISTRY)} entries")
         print(f"  Total memory increase: {final_increase:.2f} MB")
 

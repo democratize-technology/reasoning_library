@@ -4,8 +4,8 @@ Verification test for the ReDoS fix in _extract_keywords.
 This test ensures the fix works and functionality is preserved.
 """
 
-import sys
 import os
+import sys
 import time
 
 # Add src to path for import

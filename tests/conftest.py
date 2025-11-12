@@ -5,8 +5,6 @@ This module provides fixtures to ensure proper test isolation by resetting
 global state variables that persist between test runs.
 """
 
-import threading
-from collections import OrderedDict
 
 import pytest
 

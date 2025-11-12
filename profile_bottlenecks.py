@@ -10,23 +10,25 @@ This script measures the exact performance bottlenecks identified:
 Run with: python profile_bottlenecks.py
 """
 
-import cProfile
-import time
-import threading
+import os
 import statistics
-from concurrent.futures import ThreadPoolExecutor
-from typing import List, Callable, Any
-
-import numpy as np
 
 # Import the actual library functions
 import sys
-import os
+import time
+from concurrent.futures import ThreadPoolExecutor
+from typing import Callable
+
+import numpy as np
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from reasoning_library.core import _detect_mathematical_reasoning, tool_spec
 from reasoning_library.chain_of_thought import chain_of_thought_step
-from reasoning_library.inductive import predict_next_in_sequence, _calculate_pattern_quality_score
+from reasoning_library.core import _detect_mathematical_reasoning
+from reasoning_library.inductive import (
+    _calculate_pattern_quality_score,
+    predict_next_in_sequence,
+)
 
 
 class PerformanceProfiler:
@@ -237,12 +239,12 @@ class PerformanceProfiler:
         # Analyze results and provide specific recommendations
         regex_overhead = self.results.get('regex_bottleneck', {}).get('overhead_ms', 0)
 
-        print(f"\n🥷 NINJA LEVEL OPTIMIZATIONS (Quick Wins):")
+        print("\n🥷 NINJA LEVEL OPTIMIZATIONS (Quick Wins):")
         print(f"├── Regex Bottleneck: {regex_overhead:.2f}ms overhead per complex function")
         if regex_overhead > 1.0:
-            print(f"│   ✅ IMPLEMENT: Function source code caching with weak references")
-            print(f"│   ✅ IMPLEMENT: Pre-compiled regex pattern memoization")
-            print(f"│   📈 ESTIMATED GAIN: 80% reduction in detection time")
+            print("│   ✅ IMPLEMENT: Function source code caching with weak references")
+            print("│   ✅ IMPLEMENT: Pre-compiled regex pattern memoization")
+            print("│   📈 ESTIMATED GAIN: 80% reduction in detection time")
 
         # Threading analysis
         if 'threading_bottleneck' in self.results:
@@ -252,47 +254,47 @@ class PerformanceProfiler:
 
             print(f"├── Threading Bottleneck: {overhead_per_op:.2f}ms contention overhead per operation")
             if overhead_per_op > 0.1:
-                print(f"│   ✅ IMPLEMENT: Replace RLock with asyncio.Lock")
-                print(f"│   ✅ IMPLEMENT: Lock-free data structures where possible")
-                print(f"│   📈 ESTIMATED GAIN: 60% reduction in contention")
+                print("│   ✅ IMPLEMENT: Replace RLock with asyncio.Lock")
+                print("│   ✅ IMPLEMENT: Lock-free data structures where possible")
+                print("│   📈 ESTIMATED GAIN: 60% reduction in contention")
 
-        print(f"\n⚔️ SAMURAI LEVEL OPTIMIZATIONS (Disciplined Refactoring):")
-        print(f"├── Async Conversion")
-        print(f"│   ✅ IMPLEMENT: Convert chain_of_thought to async/await patterns")
-        print(f"│   ✅ IMPLEMENT: Async conversation management with asyncio.Lock")
-        print(f"│   📈 ESTIMATED GAIN: 3x improvement in I/O-bound operations")
+        print("\n⚔️ SAMURAI LEVEL OPTIMIZATIONS (Disciplined Refactoring):")
+        print("├── Async Conversion")
+        print("│   ✅ IMPLEMENT: Convert chain_of_thought to async/await patterns")
+        print("│   ✅ IMPLEMENT: Async conversation management with asyncio.Lock")
+        print("│   📈 ESTIMATED GAIN: 3x improvement in I/O-bound operations")
 
         # NumPy analysis
         numpy_results = [v for k, v in self.results.items() if k.startswith('numpy_size_')]
         if numpy_results:
-            print(f"├── NumPy Vectorization")
-            print(f"│   ✅ IMPLEMENT: Streaming confidence calculation with generators")
-            print(f"│   ✅ IMPLEMENT: Early termination for obvious non-patterns")
-            print(f"│   ✅ IMPLEMENT: Parallel pattern detection with concurrent.futures")
-            print(f"│   📈 ESTIMATED GAIN: 40% improvement for large sequences")
+            print("├── NumPy Vectorization")
+            print("│   ✅ IMPLEMENT: Streaming confidence calculation with generators")
+            print("│   ✅ IMPLEMENT: Early termination for obvious non-patterns")
+            print("│   ✅ IMPLEMENT: Parallel pattern detection with concurrent.futures")
+            print("│   📈 ESTIMATED GAIN: 40% improvement for large sequences")
 
-        print(f"\n🦖 GODZILLA LEVEL OPTIMIZATIONS (Destroy and Rebuild):")
-        print(f"├── Architecture Changes")
-        print(f"│   ✅ CONSIDER: Replace in-memory storage with Redis/SQLite")
-        print(f"│   ✅ CONSIDER: GPU acceleration with CuPy for large pattern detection")
-        print(f"│   ✅ CONSIDER: Complete async rewrite of core reasoning chains")
-        print(f"│   📈 ESTIMATED GAIN: 10x improvement for high-throughput scenarios")
+        print("\n🦖 GODZILLA LEVEL OPTIMIZATIONS (Destroy and Rebuild):")
+        print("├── Architecture Changes")
+        print("│   ✅ CONSIDER: Replace in-memory storage with Redis/SQLite")
+        print("│   ✅ CONSIDER: GPU acceleration with CuPy for large pattern detection")
+        print("│   ✅ CONSIDER: Complete async rewrite of core reasoning chains")
+        print("│   📈 ESTIMATED GAIN: 10x improvement for high-throughput scenarios")
 
         # Memory recommendations
         if 'memory_usage' in self.results:
             conv_mb = self.results['memory_usage']['conversations_mb']
             pattern_mb = self.results['memory_usage']['patterns_mb']
-            print(f"├── Memory Optimization")
+            print("├── Memory Optimization")
             print(f"│   📊 Current usage: {conv_mb:.1f}MB conversations, {pattern_mb:.1f}MB patterns")
             if conv_mb > 50:
-                print(f"│   ✅ IMPLEMENT: Persistent conversation storage")
+                print("│   ✅ IMPLEMENT: Persistent conversation storage")
             if pattern_mb > 100:
-                print(f"│   ✅ IMPLEMENT: Pattern result caching")
+                print("│   ✅ IMPLEMENT: Pattern result caching")
 
-        print(f"\n📊 PERFORMANCE BASELINE ESTABLISHED")
-        print(f"├── Run this script before/after optimizations to measure gains")
-        print(f"├── Add to CI/CD for performance regression detection")
-        print(f"└── Target: <1ms regex detection, <0.1ms threading overhead, <10ms pattern detection")
+        print("\n📊 PERFORMANCE BASELINE ESTABLISHED")
+        print("├── Run this script before/after optimizations to measure gains")
+        print("├── Add to CI/CD for performance regression detection")
+        print("└── Target: <1ms regex detection, <0.1ms threading overhead, <10ms pattern detection")
 
 
 def main():

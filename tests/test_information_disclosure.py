@@ -4,15 +4,14 @@ Test for information disclosure vulnerability through unsafe code inspection.
 This test demonstrates the vulnerability and verifies the fix.
 """
 
-import sys
 import os
+import sys
 import tempfile
-import subprocess
 
 # Add src to path for import
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from reasoning_library.core import _get_function_source_cached, tool_spec, clear_performance_caches
+from reasoning_library.core import _get_function_source_cached, tool_spec
 
 
 def test_source_code_disclosure_vulnerability():
@@ -64,7 +63,7 @@ def sensitive_function():
                 found_sensitive.append(indicator)
 
         if found_sensitive:
-            print(f"❌ VULNERABILITY CONFIRMED: Information disclosure detected!")
+            print("❌ VULNERABILITY CONFIRMED: Information disclosure detected!")
             print(f"   Sensitive data exposed: {found_sensitive}")
             print(f"   Source snippet: {extracted_source[:200]}...")
             return True  # Vulnerability exists

@@ -14,14 +14,16 @@ import numpy.typing as npt
 from .core import ReasoningChain, curry, tool_spec
 
 # Performance optimization constants
-_LARGE_SEQUENCE_THRESHOLD = 100  # Switch to optimized algorithms for sequences larger than this
+_LARGE_SEQUENCE_THRESHOLD = 100
+    # Switch to optimized algorithms for sequences larger than this
 _EARLY_EXIT_TOLERANCE = 1e-12    # For detecting perfect patterns early
 
 # CRITICAL #7: DoS Protection Constants
 _MAX_SEQUENCE_LENGTH = 10000     # Maximum allowed sequence length to prevent DoS
 _COMPUTATION_TIMEOUT = 5.0       # Maximum computation time in seconds
 _MAX_MEMORY_ELEMENTS = 5000      # Maximum elements for memory - intensive operations
-_VALUE_MAGNITUDE_LIMIT = 1e15    # Maximum allowed value magnitude to prevent overflow (adjusted for legitimate sequences)
+_VALUE_MAGNITUDE_LIMIT = 1e15
+        # Maximum allowed value magnitude to prevent overflow (adjusted for legitimate sequences)
 
 
 def _validate_sequence_input(sequence: List[float], function_name: str) -> None:
@@ -204,7 +206,7 @@ def _calculate_pattern_quality_streaming(
     Returns:
         float: Pattern quality factor (0.1 - 1.0)
     """
-    n = len(values_array)
+    len(values_array)
 
     if pattern_type == "arithmetic":
         # Streaming calculation of mean absolute difference
@@ -380,7 +382,7 @@ def predict_next_in_sequence(
     # Input validation
     if not isinstance(sequence, (list, tuple, np.ndarray)):
         raise TypeError(
-            f"Expected list / tuple / array for sequence, got {type(sequence).__name__}"
+            f"Expected list/tuple/array for sequence, got {type(sequence).__name__}"
         )
     if len(sequence) == 0:
         raise ValueError("Sequence cannot be empty")
@@ -486,7 +488,7 @@ def find_pattern_description(
     # Input validation
     if not isinstance(sequence, (list, tuple, np.ndarray)):
         raise TypeError(
-            f"Expected list / tuple / array for sequence, got {type(sequence).__name__}"
+            f"Expected list/tuple/array for sequence, got {type(sequence).__name__}"
         )
     if len(sequence) == 0:
         raise ValueError("Sequence cannot be empty")
@@ -858,7 +860,8 @@ def detect_tribonacci_pattern(sequence: List[float],
             "rule": "T[n] = T[n - 1] + T[n - 2] + T[n - 3]",
             "next_term": float(next_term),
             "confidence": _calculate_recursive_confidence(len(sequence),
-                                                          match_score, 0.8),  # Slightly lower base confidence
+                                                          match_score, 0.8),
+                                                            # Slightly lower base confidence
             "seed_values": [float(actual_sequence[0]),
                                   float(actual_sequence[1]), float(actual_sequence[2])]
         }
@@ -1035,7 +1038,8 @@ def detect_custom_step_patterns(sequence: List[float]) -> List[Dict[str, Any]]:
                 # Predict next terms
                 # Look at the pattern of differences to determine next step
                 diff_count = len(differences)
-                if diff_count % 2 == 0:  # Even number of differences, next would be step1
+                if diff_count % 2 == 0:
+                    # Even number of differences, next would be step1
                     next_term = sequence[-1] + step1
                     pattern_desc = f"Alternating: +{step1}, +{step2} repeating"
                 else:  # Odd number of differences, next would be step2
@@ -1159,7 +1163,7 @@ def detect_recursive_pattern(
                         assumptions=[f"Sequence follows {pattern_name.lower()} recurrence relation"]
                     )
                 return result
-        except Exception as e:
+        except Exception:
             # Continue to next pattern if current one fails
             continue
 

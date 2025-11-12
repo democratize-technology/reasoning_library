@@ -4,20 +4,20 @@ Verification test for the memory exhaustion fix in registries.
 This test ensures the fix works and bounds are enforced.
 """
 
-import sys
-import os
 import gc
+import os
+import sys
 
 # Add src to path for import
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from reasoning_library.core import (
+    _MAX_REGISTRY_SIZE,
     ENHANCED_TOOL_REGISTRY,
     TOOL_REGISTRY,
+    _manage_registry_size,
     clear_performance_caches,
     tool_spec,
-    _MAX_REGISTRY_SIZE,
-    _manage_registry_size
 )
 
 
@@ -64,7 +64,7 @@ def test_registry_size_bounds():
 
                 # Verify that registries don't exceed the limit
                 if enhanced_size > _MAX_REGISTRY_SIZE or tool_size > _MAX_REGISTRY_SIZE:
-                    print(f"❌ FAIL: Registry exceeded size limit!")
+                    print("❌ FAIL: Registry exceeded size limit!")
                     print(f"   ENHANCED_TOOL_REGISTRY: {enhanced_size} > {_MAX_REGISTRY_SIZE}")
                     print(f"   TOOL_REGISTRY: {tool_size} > {_MAX_REGISTRY_SIZE}")
                     return False
@@ -137,7 +137,7 @@ def test_memory_exhaustion_attack_mitigation():
         final_enhanced_size = len(ENHANCED_TOOL_REGISTRY)
         final_tool_size = len(TOOL_REGISTRY)
 
-        print(f"\nAttack mitigation results:")
+        print("\nAttack mitigation results:")
         print(f"  Functions attempted: {attack_size}")
         print(f"  Final ENHANCED_TOOL_REGISTRY: {final_enhanced_size}/{_MAX_REGISTRY_SIZE}")
         print(f"  Final TOOL_REGISTRY: {final_tool_size}/{_MAX_REGISTRY_SIZE}")
@@ -207,7 +207,7 @@ def test_registry_management_function():
         ENHANCED_TOOL_REGISTRY.append({"test": f"entry_{i}"})
         TOOL_REGISTRY.append(lambda: f"func_{i}")
 
-    print(f"Before _manage_registry_size():")
+    print("Before _manage_registry_size():")
     print(f"  ENHANCED_TOOL_REGISTRY: {len(ENHANCED_TOOL_REGISTRY)}")
     print(f"  TOOL_REGISTRY: {len(TOOL_REGISTRY)}")
 
@@ -216,14 +216,14 @@ def test_registry_management_function():
         ENHANCED_TOOL_REGISTRY.append({"test": f"trigger_{i}"})
         TOOL_REGISTRY.append(lambda: f"trigger_{i}")
 
-    print(f"After exceeding limit (before management):")
+    print("After exceeding limit (before management):")
     print(f"  ENHANCED_TOOL_REGISTRY: {len(ENHANCED_TOOL_REGISTRY)}")
     print(f"  TOOL_REGISTRY: {len(TOOL_REGISTRY)}")
 
     # Call management function
     _manage_registry_size()
 
-    print(f"After _manage_registry_size():")
+    print("After _manage_registry_size():")
     print(f"  ENHANCED_TOOL_REGISTRY: {len(ENHANCED_TOOL_REGISTRY)}")
     print(f"  TOOL_REGISTRY: {len(TOOL_REGISTRY)}")
 

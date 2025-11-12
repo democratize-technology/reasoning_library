@@ -43,7 +43,7 @@ try:
     result2 = apply_modus_ponens(True, False, reasoning_chain=chain)
     print(f"Modus Ponens (P=True, Q=False): {result2}")
 
-    print(f"\nFinal chain summary:")
+    print("\nFinal chain summary:")
     print(chain.get_summary())
 
     print("\n" + "=" * 60)
