@@ -12,7 +12,7 @@ import numpy as np
 import numpy.typing as npt
 
 from .core import ReasoningChain, curry, tool_spec
-from .exceptions import ValidationError, ComputationError, PatternDetectionError, TimeoutError
+from .exceptions import ValidationError, TimeoutError
 from .constants import (
     # Performance optimization constants
     LARGE_SEQUENCE_THRESHOLD,
@@ -21,7 +21,6 @@ from .constants import (
     # DoS Protection Constants
     MAX_SEQUENCE_LENGTH,
     COMPUTATION_TIMEOUT,
-    MAX_MEMORY_ELEMENTS,
     VALUE_MAGNITUDE_LIMIT,
 
     # Confidence calculation parameters
@@ -48,9 +47,6 @@ from .constants import (
     DATA_SUFFICIENCY_MINIMUM_GEOMETRIC,
     DATA_SUFFICIENCY_MINIMUM_DEFAULT,
     DATA_SUFFICIENCY_MINIMUM_RECURSIVE,
-    DATA_SUFFICIENCY_MINIMUM_FIBONACCI,
-    DATA_SUFFICIENCY_MINIMUM_LUCAS,
-    DATA_SUFFICIENCY_MINIMUM_TRIBONACCI,
     DATA_SUFFICIENCY_MINIMUM_POLYNOMIAL,
 
     # Pattern quality factors
@@ -61,18 +57,15 @@ from .constants import (
     # Statistical calculation parameters
     COEFFICIENT_OF_VARIATION_DECAY_FACTOR,
 
-    # Timeout and checkpoint parameters
-    TIMEOUT_CHECK_INTERVAL,
-
     # Confidence boundaries
     CONFIDENCE_MIN,
     CONFIDENCE_MAX,
-
-    # Polynomial fitting parameters
-    MAX_POLYNOMIAL_DEGREE_DEFAULT,
-    POLYNOMIAL_R_SQUARED_THRESHOLD,
-    POLYNOMIAL_COEFFICIENT_TOLERANCE,
 )
+
+# Backwards compatibility aliases for tests
+_COMPUTATION_TIMEOUT = COMPUTATION_TIMEOUT
+_MAX_SEQUENCE_LENGTH = MAX_SEQUENCE_LENGTH
+_VALUE_MAGNITUDE_LIMIT = VALUE_MAGNITUDE_LIMIT
 
 
 def _validate_sequence_input(sequence: List[float], function_name: str) -> None:
@@ -1210,7 +1203,7 @@ def detect_recursive_pattern(
                         assumptions=[f"Sequence follows {pattern_name.lower()} recurrence relation"]
                     )
                 return result
-        except (ValueError, TypeError, ZeroDivisionError, OverflowError, MemoryError) as e:
+        except (ValueError, TypeError, ZeroDivisionError, OverflowError, MemoryError):
             # Continue to next pattern if current one fails
             # Specific exceptions: computation errors, math errors, memory issues
             continue

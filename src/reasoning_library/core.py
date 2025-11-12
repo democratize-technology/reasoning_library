@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from .exceptions import CacheError, ValidationError, ComputationError
+from .exceptions import ValidationError
 from .constants import (
     # Security constants
     MAX_SOURCE_CODE_SIZE,
@@ -30,10 +30,7 @@ from .constants import (
     # Text processing limits
     KEYWORD_LENGTH_LIMIT,
     COMPONENT_LENGTH_LIMIT,
-    ISSUE_LENGTH_LIMIT,
-
-    # Confidence calculation parameters
-    BASE_CONFIDENCE_CHAIN_OF_THOUGHT,
+    MAX_TEMPLATE_KEYWORDS,
 )
 
 # Pre - compiled regex patterns with ReDoS vulnerability fixes
@@ -65,6 +62,10 @@ _math_detection_cache: Dict[int, Tuple[bool, Optional[str], Optional[str]]] = {}
 
 # Cache size limit and registry limits are now imported from constants module
 # _MAX_CACHE_SIZE and _MAX_REGISTRY_SIZE are replaced by MAX_CACHE_SIZE and MAX_REGISTRY_SIZE
+
+# Backwards compatibility aliases for tests
+_MAX_CACHE_SIZE = MAX_CACHE_SIZE
+_MAX_REGISTRY_SIZE = MAX_REGISTRY_SIZE
 
 # Thread - safe locks for registry operations
 _registry_lock = threading.RLock()
@@ -146,7 +147,7 @@ def _get_math_detection_cached(func: Callable[...,
         content = f"{func_module}:{func_qualname}:{docstring}:{source_code}"
         func_id = hashlib.md5(content.encode()).hexdigest()
 
-    except (OSError, TypeError, ValueError, AttributeError, ImportError) as e:
+    except (OSError, TypeError, ValueError, AttributeError, ImportError):
         # Fallback to object ID if hashing fails (less safe but functional)
         # Specific exceptions: import errors, type errors, value errors, attribute access errors
         func_id = str(id(func))
