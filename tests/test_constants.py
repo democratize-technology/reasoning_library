@@ -39,7 +39,7 @@ class TestSecurityConstants:
     def test_value_magnitude_limit(self):
         """Test VALUE_MAGNITUDE_LIMIT constant."""
         assert isinstance(VALUE_MAGNITUDE_LIMIT, (int, float))
-        assert VALUE_MGITUDE_LIMIT > 0
+        assert VALUE_MAGNITUDE_LIMIT > 0
         assert VALUE_MAGNITUDE_LIMIT == 1e15
 
 
