@@ -5,6 +5,7 @@ This module provides functions for simple inductive reasoning, such as
 pattern recognition in numerical sequences.
 """
 
+import time
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
@@ -15,6 +16,66 @@ from .core import ReasoningChain, ReasoningStep, curry, tool_spec
 # Performance optimization constants
 _LARGE_SEQUENCE_THRESHOLD = 100  # Switch to optimized algorithms for sequences larger than this
 _EARLY_EXIT_TOLERANCE = 1e-12    # For detecting perfect patterns early
+
+# CRITICAL #7: DoS Protection Constants
+_MAX_SEQUENCE_LENGTH = 10000     # Maximum allowed sequence length to prevent DoS
+_COMPUTATION_TIMEOUT = 5.0       # Maximum computation time in seconds
+_MAX_MEMORY_ELEMENTS = 5000      # Maximum elements for memory-intensive operations
+_VALUE_MAGNITUDE_LIMIT = 1e15    # Maximum allowed value magnitude to prevent overflow (adjusted for legitimate sequences)
+
+
+def _validate_sequence_input(sequence: List[float], function_name: str) -> None:
+    """
+    CRITICAL #7: Validate sequence input to prevent DoS attacks.
+
+    Args:
+        sequence (List[float]): Input sequence to validate
+        function_name (str): Name of the calling function for error messages
+
+    Raises:
+        ValueError: If sequence fails security validation
+    """
+    if len(sequence) > _MAX_SEQUENCE_LENGTH:
+        raise ValueError(
+            f"{function_name}: Input sequence too large ({len(sequence)} elements). "
+            f"Maximum allowed: {_MAX_SEQUENCE_LENGTH} elements. "
+            "This restriction prevents DoS attacks."
+        )
+
+    # Check for values that could cause computational issues
+    for i, value in enumerate(sequence):
+        if not np.isfinite(value):
+            raise ValueError(
+                f"{function_name}: Invalid value at position {i}: {value}. "
+                "Only finite numbers are allowed."
+            )
+
+        if abs(value) > _VALUE_MAGNITUDE_LIMIT:
+            raise ValueError(
+                f"{function_name}: Value magnitude too large at position {i}: {value}. "
+                f"Maximum allowed magnitude: {_VALUE_MAGNITUDE_LIMIT}. "
+                "This prevents overflow and performance issues."
+            )
+
+
+def _create_computation_timeout(start_time: float, function_name: str) -> None:
+    """
+    CRITICAL #7: Check if computation has exceeded timeout limit.
+
+    Args:
+        start_time (float): Start time from time.time()
+        function_name (str): Name of the calling function for error messages
+
+    Raises:
+        TimeoutError: If computation has exceeded timeout
+    """
+    elapsed = time.time() - start_time
+    if elapsed > _COMPUTATION_TIMEOUT:
+        raise TimeoutError(
+            f"{function_name}: Computation timeout after {elapsed:.2f} seconds. "
+            f"Maximum allowed: {_COMPUTATION_TIMEOUT} seconds. "
+            "This prevents DoS attacks."
+        )
 
 
 def _assess_data_sufficiency(sequence_length: int, pattern_type: str) -> float:
@@ -575,8 +636,17 @@ def detect_fibonacci_pattern(sequence: List[float], tolerance: float = 1e-10) ->
     Returns:
         Optional[Dict]: Pattern information if detected, None otherwise
     """
+    # CRITICAL #7: DoS Protection - Validate input
+    _validate_sequence_input(sequence, "detect_fibonacci_pattern")
+
+    # Start timeout tracking
+    start_time = time.time()
+
     if len(sequence) < 5:  # Need at least 5 terms for reliable Fibonacci detection
         return None
+
+    # CRITICAL #7: Check timeout before intensive computation
+    _create_computation_timeout(start_time, "detect_fibonacci_pattern")
 
     # Check if sequence follows Fibonacci rule: F[n] = F[n-1] + F[n-2]
     actual_sequence = np.array(sequence)
@@ -586,9 +656,23 @@ def detect_fibonacci_pattern(sequence: List[float], tolerance: float = 1e-10) ->
     calculated_sequence[0] = actual_sequence[0]
     calculated_sequence[1] = actual_sequence[1]
 
-    # Generate the rest using Fibonacci rule
-    for i in range(2, len(actual_sequence)):
-        calculated_sequence[i] = calculated_sequence[i-1] + calculated_sequence[i-2]
+    # CRITICAL #7: Protected computation with timeout checks
+    try:
+        for i in range(2, len(actual_sequence)):
+            # Check timeout every 1000 iterations to prevent DoS
+            if i % 1000 == 0:
+                _create_computation_timeout(start_time, "detect_fibonacci_pattern")
+
+            # Check for overflow before performing operation
+            if abs(calculated_sequence[i-1]) > _VALUE_MAGNITUDE_LIMIT or abs(calculated_sequence[i-2]) > _VALUE_MAGNITUDE_LIMIT:
+                raise ValueError(f"Value overflow detected at position {i} in Fibonacci calculation")
+
+            calculated_sequence[i] = calculated_sequence[i-1] + calculated_sequence[i-2]
+    except (OverflowError, FloatingPointError) as e:
+        raise ValueError(f"Arithmetic overflow in Fibonacci pattern detection: {e}")
+
+    # CRITICAL #7: Final timeout check
+    _create_computation_timeout(start_time, "detect_fibonacci_pattern")
 
     # Check how well the calculated sequence matches the actual one
     if np.allclose(actual_sequence, calculated_sequence, atol=tolerance):
@@ -621,8 +705,17 @@ def detect_lucas_pattern(sequence: List[float], tolerance: float = 1e-10) -> Opt
     Returns:
         Optional[Dict]: Pattern information if detected, None otherwise
     """
+    # CRITICAL #7: DoS Protection - Validate input
+    _validate_sequence_input(sequence, "detect_lucas_pattern")
+
+    # Start timeout tracking
+    start_time = time.time()
+
     if len(sequence) < 5:  # Need at least 5 terms for reliable Lucas detection
         return None
+
+    # CRITICAL #7: Check timeout before intensive computation
+    _create_computation_timeout(start_time, "detect_lucas_pattern")
 
     # Lucas sequence follows same rule as Fibonacci but starts with 2, 1
     actual_sequence = np.array(sequence)
@@ -632,9 +725,23 @@ def detect_lucas_pattern(sequence: List[float], tolerance: float = 1e-10) -> Opt
     calculated_sequence[0] = actual_sequence[0]
     calculated_sequence[1] = actual_sequence[1]
 
-    # Generate the rest using Lucas rule (same as Fibonacci)
-    for i in range(2, len(actual_sequence)):
-        calculated_sequence[i] = calculated_sequence[i-1] + calculated_sequence[i-2]
+    # CRITICAL #7: Protected computation with timeout checks
+    try:
+        for i in range(2, len(actual_sequence)):
+            # Check timeout every 1000 iterations to prevent DoS
+            if i % 1000 == 0:
+                _create_computation_timeout(start_time, "detect_lucas_pattern")
+
+            # Check for overflow before performing operation
+            if abs(calculated_sequence[i-1]) > _VALUE_MAGNITUDE_LIMIT or abs(calculated_sequence[i-2]) > _VALUE_MAGNITUDE_LIMIT:
+                raise ValueError(f"Value overflow detected at position {i} in Lucas calculation")
+
+            calculated_sequence[i] = calculated_sequence[i-1] + calculated_sequence[i-2]
+    except (OverflowError, FloatingPointError) as e:
+        raise ValueError(f"Arithmetic overflow in Lucas pattern detection: {e}")
+
+    # CRITICAL #7: Final timeout check
+    _create_computation_timeout(start_time, "detect_lucas_pattern")
 
     # Check if it's a Lucas sequence (should start with 2, 1) or Lucas-like
     is_classic_lucas = np.allclose(actual_sequence[:2], [2, 1], atol=tolerance)
@@ -673,8 +780,17 @@ def detect_tribonacci_pattern(sequence: List[float], tolerance: float = 1e-10) -
     Returns:
         Optional[Dict]: Pattern information if detected, None otherwise
     """
+    # CRITICAL #7: DoS Protection - Validate input
+    _validate_sequence_input(sequence, "detect_tribonacci_pattern")
+
+    # Start timeout tracking
+    start_time = time.time()
+
     if len(sequence) < 6:  # Need at least 6 terms for reliable Tribonacci detection
         return None
+
+    # CRITICAL #7: Check timeout before intensive computation
+    _create_computation_timeout(start_time, "detect_tribonacci_pattern")
 
     # Check if sequence follows Tribonacci rule: T[n] = T[n-1] + T[n-2] + T[n-3]
     actual_sequence = np.array(sequence)
@@ -685,9 +801,25 @@ def detect_tribonacci_pattern(sequence: List[float], tolerance: float = 1e-10) -
     calculated_sequence[1] = actual_sequence[1]
     calculated_sequence[2] = actual_sequence[2]
 
-    # Generate the rest using Tribonacci rule
-    for i in range(3, len(actual_sequence)):
-        calculated_sequence[i] = calculated_sequence[i-1] + calculated_sequence[i-2] + calculated_sequence[i-3]
+    # CRITICAL #7: Protected computation with timeout checks
+    try:
+        for i in range(3, len(actual_sequence)):
+            # Check timeout every 1000 iterations to prevent DoS
+            if i % 1000 == 0:
+                _create_computation_timeout(start_time, "detect_tribonacci_pattern")
+
+            # Check for overflow before performing operation
+            if (abs(calculated_sequence[i-1]) > _VALUE_MAGNITUDE_LIMIT or
+                abs(calculated_sequence[i-2]) > _VALUE_MAGNITUDE_LIMIT or
+                abs(calculated_sequence[i-3]) > _VALUE_MAGNITUDE_LIMIT):
+                raise ValueError(f"Value overflow detected at position {i} in Tribonacci calculation")
+
+            calculated_sequence[i] = calculated_sequence[i-1] + calculated_sequence[i-2] + calculated_sequence[i-3]
+    except (OverflowError, FloatingPointError) as e:
+        raise ValueError(f"Arithmetic overflow in Tribonacci pattern detection: {e}")
+
+    # CRITICAL #7: Final timeout check
+    _create_computation_timeout(start_time, "detect_tribonacci_pattern")
 
     # Check how well the calculated sequence matches the actual one
     if np.allclose(actual_sequence, calculated_sequence, atol=tolerance):
@@ -943,18 +1075,29 @@ def detect_recursive_pattern(
     Returns:
         Optional[Dict]: Pattern information if detected, None otherwise
     """
+    # CRITICAL #7: DoS Protection - Validate input (also handles type conversion)
     if not isinstance(sequence, (list, tuple, np.ndarray)):
         raise TypeError(f"Expected list/tuple/array for sequence, got {type(sequence).__name__}")
 
-    if len(sequence) < 5:
+    # Convert to list for validation
+    sequence_list = list(sequence)
+    _validate_sequence_input(sequence_list, "detect_recursive_pattern")
+
+    # Start timeout tracking
+    start_time = time.time()
+
+    if len(sequence_list) < 5:
         if reasoning_chain:
             reasoning_chain.add_step(
                 stage="Inductive Reasoning: Recursive Pattern Detection",
-                description=f"Sequence {sequence} too short for recursive pattern detection",
+                description=f"Sequence {sequence_list} too short for recursive pattern detection",
                 result=None,
                 confidence=0.0
             )
         return None
+
+    # CRITICAL #7: Check timeout before pattern detection
+    _create_computation_timeout(start_time, "detect_recursive_pattern")
 
     # Try different recursive patterns in order of preference
     patterns_to_check = [
@@ -963,24 +1106,35 @@ def detect_recursive_pattern(
         ("Tribonacci", detect_tribonacci_pattern)
     ]
 
+    # CRITICAL #7: Protected pattern checking with timeout
     for pattern_name, detector in patterns_to_check:
-        result = detector(sequence, tolerance)
-        if result:
-            if reasoning_chain:
-                reasoning_chain.add_step(
-                    stage="Inductive Reasoning: Recursive Pattern Detection",
-                    description=f"Detected {pattern_name} pattern: {result['description'] if 'description' in result else result['rule']}",
-                    result=result,
-                    confidence=result['confidence'],
-                    evidence=f"Pattern rule: {result['rule']}. Next term: {result['next_term']}",
-                    assumptions=[f"Sequence follows {pattern_name.lower()} recurrence relation"]
-                )
-            return result
+        # Check timeout before each pattern detector
+        _create_computation_timeout(start_time, "detect_recursive_pattern")
+
+        try:
+            result = detector(sequence_list, tolerance)
+            if result:
+                # CRITICAL #7: Final timeout check
+                _create_computation_timeout(start_time, "detect_recursive_pattern")
+
+                if reasoning_chain:
+                    reasoning_chain.add_step(
+                        stage="Inductive Reasoning: Recursive Pattern Detection",
+                        description=f"Detected {pattern_name} pattern: {result['description'] if 'description' in result else result['rule']}",
+                        result=result,
+                        confidence=result['confidence'],
+                        evidence=f"Pattern rule: {result['rule']}. Next term: {result['next_term']}",
+                        assumptions=[f"Sequence follows {pattern_name.lower()} recurrence relation"]
+                    )
+                return result
+        except Exception as e:
+            # Continue to next pattern if current one fails
+            continue
 
     if reasoning_chain:
         reasoning_chain.add_step(
             stage="Inductive Reasoning: Recursive Pattern Detection",
-            description=f"No recursive pattern found in sequence: {sequence}",
+            description=f"No recursive pattern found in sequence: {sequence_list}",
             result=None,
             confidence=0.0
         )
