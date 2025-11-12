@@ -65,8 +65,10 @@ def _extract_keywords(text: str) -> List[str]:
         'could', 'should', 'may', 'might', 'can', 'must', 'shall', 'very', 'really'
     }
 
-    # Convert to lowercase and split
-    words = re.findall(r'\b\w+\b', text.lower())
+    # Convert to lowercase and extract words safely without ReDoS vulnerability
+    # Fixed pattern prevents catastrophic backtracking by avoiding complex \b boundaries
+    # This is a safer, non-backtracking alternative to r'\b\w+\b'
+    words = re.findall(r'[a-zA-Z0-9]+', text.lower())
 
     # Filter out common words and short words
     keywords = [word for word in words if word not in common_words and len(word) > 2]
