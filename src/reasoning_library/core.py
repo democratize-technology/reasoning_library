@@ -4,6 +4,7 @@ Core utilities for the reasoning library.
 
 import inspect
 import re
+import threading
 import weakref
 from dataclasses import dataclass, field
 from functools import wraps, lru_cache
@@ -41,6 +42,14 @@ _math_detection_cache: Dict[int, Tuple[bool, Optional[str], Optional[str]]] = {}
 
 # Cache size limit to prevent unbounded growth
 _MAX_CACHE_SIZE = 1000
+
+# Registry size limits to prevent memory exhaustion attacks
+# Based on: ~100 bytes per registry entry * 500 entries = ~50KB memory usage
+# This limit prevents DoS while maintaining reasonable tool capacity
+_MAX_REGISTRY_SIZE = 500
+
+# Thread-safe locks for registry operations
+_registry_lock = threading.RLock()
 
 def _get_function_source_cached(func: Callable[..., Any]) -> str:
     """
@@ -108,25 +117,62 @@ def _get_math_detection_cached(func: Callable[..., Any]) -> Tuple[bool, Optional
     _math_detection_cache[func_id] = result
     return result
 
+def _manage_registry_size():
+    """
+    Manage registry size to prevent unbounded growth and memory exhaustion attacks.
+
+    Implements FIFO-style eviction for both ENHANCED_TOOL_REGISTRY and TOOL_REGISTRY
+    to maintain bounded memory usage. Only performs expensive operations when
+    actually exceeding limits to maintain O(1) performance for normal use.
+
+    Thread-safe: Uses _registry_lock to prevent race conditions.
+    """
+    with _registry_lock:
+        # Early exit if both registries are under limit (O(1) performance)
+        if (len(ENHANCED_TOOL_REGISTRY) < _MAX_REGISTRY_SIZE and
+            len(TOOL_REGISTRY) < _MAX_REGISTRY_SIZE):
+            return
+
+        # Only if exceeding limit, then do expensive eviction operations
+        if len(ENHANCED_TOOL_REGISTRY) >= _MAX_REGISTRY_SIZE:
+            # Remove oldest 25% of entries (FIFO eviction)
+            remove_count = _MAX_REGISTRY_SIZE // 4
+            ENHANCED_TOOL_REGISTRY[:] = ENHANCED_TOOL_REGISTRY[remove_count:]
+
+        if len(TOOL_REGISTRY) >= _MAX_REGISTRY_SIZE:
+            # Remove oldest 25% of entries (FIFO eviction)
+            remove_count = _MAX_REGISTRY_SIZE // 4
+            TOOL_REGISTRY[:] = TOOL_REGISTRY[remove_count:]
+
+
 def clear_performance_caches() -> Dict[str, int]:
     """
-    Clear all performance optimization caches.
+    Clear all performance optimization caches and registries.
 
     Useful for testing, memory management, or when function definitions change.
+
+    Thread-safe: Uses _registry_lock to prevent race conditions.
 
     Returns:
         dict: Statistics about cleared cache entries
     """
-    source_cache_size = len(_function_source_cache)
-    math_cache_size = len(_math_detection_cache)
+    with _registry_lock:
+        source_cache_size = len(_function_source_cache)
+        math_cache_size = len(_math_detection_cache)
+        enhanced_registry_size = len(ENHANCED_TOOL_REGISTRY)
+        tool_registry_size = len(TOOL_REGISTRY)
 
-    _function_source_cache.clear()
-    _math_detection_cache.clear()
+        _function_source_cache.clear()
+        _math_detection_cache.clear()
+        ENHANCED_TOOL_REGISTRY.clear()
+        TOOL_REGISTRY.clear()
 
-    return {
-        "source_cache_cleared": source_cache_size,
-        "math_detection_cache_cleared": math_cache_size
-    }
+        return {
+            "source_cache_cleared": source_cache_size,
+            "math_detection_cache_cleared": math_cache_size,
+            "enhanced_registry_cleared": enhanced_registry_size,
+            "tool_registry_cleared": tool_registry_size
+        }
 
 # --- Enhanced Tool Registry ---
 
@@ -738,12 +784,17 @@ def tool_spec(
             platform_notes={},
         )
 
-        ENHANCED_TOOL_REGISTRY.append(
-            {"function": wrapper, "tool_spec": tool_specification, "metadata": metadata}
-        )
+        # Thread-safe atomic registry updates with size management
+        with _registry_lock:
+            ENHANCED_TOOL_REGISTRY.append(
+                {"function": wrapper, "tool_spec": tool_specification, "metadata": metadata}
+            )
 
-        setattr(wrapper, "tool_spec", tool_specification)
-        TOOL_REGISTRY.append(wrapper)
+            setattr(wrapper, "tool_spec", tool_specification)
+            TOOL_REGISTRY.append(wrapper)
+
+            # Manage registry size AFTER adding entries to prevent race conditions
+            _manage_registry_size()
 
         return wrapper
 
