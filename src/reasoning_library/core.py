@@ -51,37 +51,45 @@ _MAX_REGISTRY_SIZE = 500
 # Thread-safe locks for registry operations
 _registry_lock = threading.RLock()
 
+# Thread-safe locks for cache operations
+_cache_lock = threading.RLock()
+
 def _get_function_source_cached(func: Callable[..., Any]) -> str:
     """
-    Get function source code with caching to avoid repeated inspect.getsource() calls.
+    SECURE: Get function source code with safety restrictions to prevent information disclosure.
 
-    Uses weak references to prevent memory leaks while maintaining performance.
-    This optimization targets the 1.92ms overhead in mathematical reasoning detection.
+    DISABLED for security: Source code inspection is disabled to prevent:
+    - Information disclosure of sensitive implementation details
+    - Access to source code from external files through inspect.getsource()
+    - Exposure of secrets, API keys, or sensitive data in source comments
+    - File system access and path traversal through code inspection
+    - Proprietary algorithm exposure
+
+    Thread-safe: Uses _cache_lock to prevent race conditions in cache access.
 
     Args:
-        func: Function to extract source code from
+        func: Function to analyze (source code will NOT be extracted for security)
 
     Returns:
-        str: Function source code (empty string if extraction fails)
+        str: Always empty string for security reasons
     """
-    # Check cache first (WeakKeyDictionary automatically handles cleanup)
-    if func in _function_source_cache:
-        return _function_source_cache[func]
+    # SECURITY: Source code inspection disabled to prevent information disclosure
+    # The inspect.getsource() function can access files on disk and expose sensitive
+    # information including API keys, passwords, and proprietary algorithms.
+    # This function now returns empty string for all inputs to eliminate the attack vector.
 
-    # Extract source code (expensive operation we're optimizing)
-    try:
-        source_code = inspect.getsource(func) if hasattr(func, "__code__") else ""
-    except (OSError, TypeError):
-        # Handle dynamic functions, lambdas, and other edge cases gracefully
-        source_code = ""
+    # Thread-safe cache access with proper locking
+    with _cache_lock:
+        # Check cache first (WeakKeyDictionary automatically handles cleanup)
+        if func in _function_source_cache:
+            return _function_source_cache[func]
 
-    # Apply security limit
-    if len(source_code) > MAX_SOURCE_CODE_SIZE:
-        source_code = source_code[:MAX_SOURCE_CODE_SIZE]
+        # Always return empty string for security - prevents any source code disclosure
+        empty_result = ""
 
-    # Cache result (WeakKeyDictionary automatically cleans up when func is GC'd)
-    _function_source_cache[func] = source_code
-    return source_code
+        # Cache the empty result to maintain expected behavior and performance
+        _function_source_cache[func] = empty_result
+        return empty_result
 
 def _get_math_detection_cached(func: Callable[..., Any]) -> Tuple[bool, Optional[str], Optional[str]]:
     """
@@ -89,6 +97,9 @@ def _get_math_detection_cached(func: Callable[..., Any]) -> Tuple[bool, Optional
 
     Uses function id as cache key for stability across calls.
     Implements LRU-style eviction to prevent unbounded cache growth.
+
+    Thread-safe: Uses _cache_lock to prevent race conditions in cache access
+    and eviction logic that could cause data corruption.
 
     Args:
         func: Function to analyze for mathematical reasoning
@@ -98,24 +109,32 @@ def _get_math_detection_cached(func: Callable[..., Any]) -> Tuple[bool, Optional
     """
     func_id = id(func)
 
-    # Check cache first
-    if func_id in _math_detection_cache:
-        return _math_detection_cache[func_id]
+    # Thread-safe cache access with proper locking
+    with _cache_lock:
+        # Check cache first
+        if func_id in _math_detection_cache:
+            return _math_detection_cache[func_id]
 
-    # Perform expensive detection
+    # Perform expensive detection outside of lock to minimize contention
     result = _detect_mathematical_reasoning_uncached(func)
 
-    # Implement simple cache size management (LRU-style)
-    if len(_math_detection_cache) >= _MAX_CACHE_SIZE:
-        # Remove oldest entries (simple FIFO approach)
-        # In production, consider using functools.lru_cache or more sophisticated eviction
-        oldest_keys = list(_math_detection_cache.keys())[:_MAX_CACHE_SIZE // 4]
-        for key in oldest_keys:
-            _math_detection_cache.pop(key, None)
+    # Thread-safe cache update and eviction with proper locking
+    with _cache_lock:
+        # Double-check pattern: another thread might have added this while we were detecting
+        if func_id in _math_detection_cache:
+            return _math_detection_cache[func_id]
 
-    # Cache the result
-    _math_detection_cache[func_id] = result
-    return result
+        # Implement atomic cache size management and eviction
+        if len(_math_detection_cache) >= _MAX_CACHE_SIZE:
+            # Remove oldest entries (simple FIFO approach)
+            # In production, consider using functools.lru_cache or more sophisticated eviction
+            oldest_keys = list(_math_detection_cache.keys())[:_MAX_CACHE_SIZE // 4]
+            for key in oldest_keys:
+                _math_detection_cache.pop(key, None)
+
+        # Cache the result
+        _math_detection_cache[func_id] = result
+        return result
 
 def _manage_registry_size():
     """
@@ -151,12 +170,13 @@ def clear_performance_caches() -> Dict[str, int]:
 
     Useful for testing, memory management, or when function definitions change.
 
-    Thread-safe: Uses _registry_lock to prevent race conditions.
+    Thread-safe: Uses both _registry_lock and _cache_lock to prevent race conditions.
 
     Returns:
         dict: Statistics about cleared cache entries
     """
-    with _registry_lock:
+    # Lock both caches and registries to prevent race conditions during clearing
+    with _cache_lock, _registry_lock:
         source_cache_size = len(_function_source_cache)
         math_cache_size = len(_math_detection_cache)
         enhanced_registry_size = len(ENHANCED_TOOL_REGISTRY)
@@ -476,58 +496,72 @@ def _enhance_description_with_confidence_docs(
 
 
 def get_tool_specs() -> List[Dict[str, Any]]:
-    """Returns a list of all registered tool specifications (legacy format)."""
-    return [getattr(func, "tool_spec") for func in TOOL_REGISTRY]
+    """
+    Returns a list of all registered tool specifications (legacy format).
+
+    Thread-safe: Uses _registry_lock to prevent race conditions during iteration.
+    """
+    with _registry_lock:
+        return [getattr(func, "tool_spec") for func in TOOL_REGISTRY.copy()]
 
 
 def get_openai_tools() -> List[Dict[str, Any]]:
     """
     Export tool specifications in OpenAI ChatCompletions API format.
 
+    Thread-safe: Uses _registry_lock to prevent race conditions during iteration.
+
     Returns:
         List of OpenAI-compatible tool specifications
     """
-    openai_tools = []
-    for entry in ENHANCED_TOOL_REGISTRY:
-        # Create enhanced description using safe copy
-        enhanced_spec = _safe_copy_spec(entry["tool_spec"])
-        enhanced_spec["function"]["description"] = (
-            _enhance_description_with_confidence_docs(
-                enhanced_spec["function"]["description"], entry["metadata"]
+    with _registry_lock:
+        openai_tools = []
+        for entry in ENHANCED_TOOL_REGISTRY.copy():
+            # Create enhanced description using safe copy
+            enhanced_spec = _safe_copy_spec(entry["tool_spec"])
+            enhanced_spec["function"]["description"] = (
+                _enhance_description_with_confidence_docs(
+                    enhanced_spec["function"]["description"], entry["metadata"]
+                )
             )
-        )
-        openai_tools.append(_openai_format(enhanced_spec))
-    return openai_tools
+            openai_tools.append(_openai_format(enhanced_spec))
+        return openai_tools
 
 
 def get_bedrock_tools() -> List[Dict[str, Any]]:
     """
     Export tool specifications in AWS Bedrock Converse API format.
 
+    Thread-safe: Uses _registry_lock to prevent race conditions during iteration.
+
     Returns:
         List of Bedrock-compatible tool specifications
     """
-    bedrock_tools = []
-    for entry in ENHANCED_TOOL_REGISTRY:
-        # Create enhanced description using safe copy
-        enhanced_spec = _safe_copy_spec(entry["tool_spec"])
-        enhanced_spec["function"]["description"] = (
-            _enhance_description_with_confidence_docs(
-                enhanced_spec["function"]["description"], entry["metadata"]
+    with _registry_lock:
+        bedrock_tools = []
+        for entry in ENHANCED_TOOL_REGISTRY.copy():
+            # Create enhanced description using safe copy
+            enhanced_spec = _safe_copy_spec(entry["tool_spec"])
+            enhanced_spec["function"]["description"] = (
+                _enhance_description_with_confidence_docs(
+                    enhanced_spec["function"]["description"], entry["metadata"]
+                )
             )
-        )
-        bedrock_tools.append(_bedrock_format(enhanced_spec))
-    return bedrock_tools
+            bedrock_tools.append(_bedrock_format(enhanced_spec))
+        return bedrock_tools
 
 
 def get_enhanced_tool_registry() -> List[Dict[str, Any]]:
     """
     Get the complete enhanced tool registry with metadata.
 
+    Thread-safe: Uses _registry_lock to prevent race conditions during access.
+
     Returns:
         List of enhanced tool registry entries
     """
-    return ENHANCED_TOOL_REGISTRY.copy()
+    with _registry_lock:
+        return ENHANCED_TOOL_REGISTRY.copy()
 
 
 # --- End Enhanced Tool Registry ---
