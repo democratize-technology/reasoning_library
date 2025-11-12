@@ -275,3 +275,100 @@ class TestInputValidation:
 
         assert len(result) > 0
         # Should handle unicode gracefully (either include or filter out)
+
+
+class TestDoSProtection:
+    """Test Denial of Service (DoS) protection for large inputs."""
+
+    def test_extremely_large_string_dos_attack(self):
+        """Test DoS protection against extremely large string inputs (>1MB)."""
+        # Create a maliciously large string that could cause memory issues
+        large_action = "A" * 1000000  # 1MB string
+        large_component = "B" * 1000000  # 1MB string
+        large_issue = "C" * 1000000  # 1MB string
+
+        # These should be truncated early in processing, not after
+        observations = [f"The {large_component} system has {large_issue} after {large_action}"]
+        context = f"Production environment with {large_component} and {large_issue}"
+
+        # This should handle large inputs gracefully without memory issues
+        # The current implementation applies length limits AFTER processing
+        # which means it still processes the full large strings
+        result = generate_hypotheses(
+            observations=observations,
+            reasoning_chain=None,
+            context=context,
+            max_hypotheses=1  # Limit to minimize processing time
+        )
+
+        # Should return results without using excessive memory
+        assert len(result) > 0
+
+        # Check that the generated hypotheses are properly truncated
+        for h in result:
+            hypothesis = h["hypothesis"]
+            # Hypotheses should be reasonably sized, not contain the massive strings
+            assert len(hypothesis) < 10000  # Should be much smaller than input
+
+            # Should not contain the maliciously large strings
+            assert large_action not in hypothesis
+            assert large_component not in hypothesis
+            assert large_issue not in hypothesis
+
+    def test_boundary_conditions_size_limits(self):
+        """Test boundary conditions around size limits."""
+        # Test exactly at the limit
+        exactly_50 = "A" * 50
+        exactly_100 = "B" * 100
+
+        observations = [f"System {exactly_50} has issue {exactly_100}"]
+        result = generate_hypotheses(
+            observations=observations,
+            reasoning_chain=None,
+            context="test",
+            max_hypotheses=1
+        )
+
+        assert len(result) > 0
+
+        # Test just over the limit
+        over_50 = "C" * 51
+        over_100 = "D" * 101
+
+        observations = [f"System {over_50} has issue {over_100}"]
+        result = generate_hypotheses(
+            observations=observations,
+            reasoning_chain=None,
+            context="test",
+            max_hypotheses=1
+        )
+
+        assert len(result) > 0
+        # Should truncate the over-limit strings
+        for h in result:
+            hypothesis = h["hypothesis"]
+            # Should not contain the full over-limit strings
+            assert over_50 not in hypothesis
+            assert over_100 not in hypothesis
+
+    def test_early_validation_performance(self):
+        """Test that large inputs are validated early to prevent performance issues."""
+        import time
+
+        # Create a large input that would be slow to process if not truncated early
+        large_input = "X" * 100000  # 100KB string
+        observations = [f"System with {large_input} is experiencing issues"]
+
+        start_time = time.time()
+        result = generate_hypotheses(
+            observations=observations,
+            reasoning_chain=None,
+            context="test",
+            max_hypotheses=1
+        )
+        end_time = time.time()
+
+        # Should complete quickly (under 1 second) even with large input
+        processing_time = end_time - start_time
+        assert processing_time < 1.0, f"Processing took {processing_time}s, should be < 1s"
+        assert len(result) > 0

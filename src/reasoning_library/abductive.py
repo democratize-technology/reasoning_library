@@ -7,10 +7,60 @@ including hypothesis generation and evaluation from observations.
 """
 
 import re
-from collections import defaultdict
 from typing import Any, Dict, List, Optional
 
+from collections import defaultdict
+
 from .core import ReasoningChain, curry, tool_spec
+
+
+def _validate_and_sanitize_input_size(
+    observations: List[str],
+    context: Optional[str] = None,
+    max_observation_length: int = 10000,
+    max_context_length: int = 5000
+) -> tuple[List[str], Optional[str]]:
+    """
+    Validate and sanitize input sizes to prevent DoS attacks from large strings.
+
+    This function applies size limits BEFORE any processing operations to prevent
+    memory exhaustion and performance degradation from maliciously large inputs.
+
+    Args:
+        observations (List[str]): List of observations to validate and truncate
+        context (Optional[str]): Additional context to validate and truncate
+        max_observation_length (int): Maximum length for each observation
+        max_context_length (int): Maximum length for context string
+
+    Returns:
+        tuple[List[str], Optional[str]]: Sanitized observations and context
+
+    Security:
+        - Prevents DoS attacks from extremely large strings
+        - Applies limits early, before any string processing
+        - Maintains backward compatibility with reasonable defaults
+    """
+    if not observations:
+        return [], context
+
+    # Validate and truncate each observation
+    sanitized_observations = []
+    for obs in observations:
+        if not isinstance(obs, str):
+            obs = str(obs)
+        # Truncate if too long to prevent memory issues
+        if len(obs) > max_observation_length:
+            obs = obs[:max_observation_length].strip()
+        sanitized_observations.append(obs)
+
+    # Validate and truncate context
+    if context is not None:
+        if not isinstance(context, str):
+            context = str(context)
+        if len(context) > max_context_length:
+            context = context[:max_context_length].strip()
+
+    return sanitized_observations, context
 
 
 def _validate_confidence_value(confidence: Any, hypothesis_index: Optional[int] = None) -> float:
@@ -138,7 +188,14 @@ def _extract_keywords_with_context(
     Returns:
         Dict[str, List[str]]: Dictionary with actions, components, and issues
     """
-    # Combine all text
+    # SECURITY: Apply input size validation BEFORE any processing to prevent DoS attacks
+    observations, context = _validate_and_sanitize_input_size(
+        observations, context,
+        max_observation_length=1000,  # Smaller limit for keyword extraction
+        max_context_length=500
+    )
+
+    # Combine all text with size limits already applied
     text = " ".join(observations).lower()
     if context:
         text += " " + context.lower()
@@ -271,6 +328,9 @@ def generate_hypotheses(
     Returns:
         List[Dict]: List of generated hypotheses with confidence scores and metadata
     """
+    # SECURITY: Apply input size validation BEFORE any processing to prevent DoS attacks
+    observations, context = _validate_and_sanitize_input_size(observations, context)
+
     if not observations:
         if reasoning_chain:
             reasoning_chain.add_step(
@@ -358,8 +418,12 @@ def generate_hypotheses(
     # 4. Domain - specific template hypotheses (if context provided)
     if context:
         # Determine domain based on keywords
+        # SECURITY: Input size already validated at function entry, so observations and context are safe
         domain = None
         all_text = " ".join(observations) + " " + context.lower()
+        # Additional safeguard: ensure all_text doesn't get too large even with validated inputs
+        if len(all_text) > 50000:  # 50KB limit for domain detection
+            all_text = all_text[:50000]
 
         for domain_name, domain_info in DOMAIN_TEMPLATES.items():
             if any(keyword in all_text for keyword in domain_info["keywords"]):
@@ -388,6 +452,12 @@ def generate_hypotheses(
                     ] if keywords["issues"] else "performance issue"
                 )
 
+                # SECURITY: Apply length limits IMMEDIATELY after keyword extraction
+                # This prevents DoS attacks from large strings that were extracted
+                action = action[:50].strip()
+                component = component[:50].strip()
+                issue = issue[:100].strip()
+
                 # Validate inputs before template formatting
                 if not isinstance(action, str) or len(action.strip()) == 0:
                     action = "recent change"
@@ -395,11 +465,6 @@ def generate_hypotheses(
                     component = "system"
                 if not isinstance(issue, str) or len(issue.strip()) == 0:
                     issue = "performance issue"
-
-                # Length limits to prevent excessive output
-                action = action[:50].strip()
-                component = component[:50].strip()
-                issue = issue[:100].strip()
 
                 # SECURE: Sanitize inputs to prevent template injection attacks
                 # Remove any template syntax characters that could break format strings
@@ -455,20 +520,37 @@ def generate_hypotheses(
             # Fallback to original context hypothesis if no domain matches
             context_keywords = _extract_keywords(context)
             if context_keywords:
+                # SECURITY: Apply length limits to keywords to prevent DoS in contextual hypotheses
+                safe_keywords = []
+                for keyword in context_keywords[:3]:
+                    # Truncate each keyword to prevent long repetitive strings
+                    safe_keyword = keyword[:50].strip()
+                    if safe_keyword:  # Only add non-empty keywords
+                        safe_keywords.append(safe_keyword)
+
+                # Ensure we don't create overly long hypotheses
+                hypothesis_text = "The observations are related to the context"
+                if safe_keywords:
+                    keyword_list = ', '.join(safe_keywords)
+                    # Limit total hypothesis length
+                    hypothesis_text = f"The observations are related to the context: {keyword_list}"
+                    if len(hypothesis_text) > 500:  # Hard limit for contextual hypotheses
+                        hypothesis_text = hypothesis_text[:500].strip()
+
                 context_hypothesis = {
-                    "hypothesis": f"The observations are related to the context: {', '.join(context_keywords[:3])}",
+                    "hypothesis": hypothesis_text,
                     "explains": list(range(len(observations))),
                     "confidence": 0.0,  # Will be calculated
                     "assumptions": [
                         "Context is relevant to observations",
-                        f"{context_keywords[0]} is a key factor"
+                        f"{safe_keywords[0] if safe_keywords else 'context'} is a key factor"
                     ],
                     "testable_predictions": [
                         "Changing the context should change the observations",
                         "Similar contexts should produce similar observations"
                     ],
                     "type": "contextual",
-                    "context_keywords": context_keywords[:3]
+                    "context_keywords": safe_keywords
                 }
                 context_hypothesis["confidence"] = _calculate_hypothesis_confidence(
                     context_hypothesis, len(observations), len(observations), 2
