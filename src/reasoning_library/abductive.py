@@ -13,6 +13,46 @@ from typing import Any, Dict, List, Optional
 from .core import ReasoningChain, curry, tool_spec
 
 
+def _validate_confidence_value(confidence: Any, hypothesis_index: Optional[int] = None) -> float:
+    """
+    Validate and normalize confidence value to prevent type coercion vulnerabilities.
+
+    Args:
+        confidence (Any): The confidence value to validate
+        hypothesis_index (Optional[int]): Index of hypothesis for error messages
+
+    Returns:
+        float: Validated and normalized confidence value (0.0 - 1.0)
+
+    Raises:
+        TypeError: If confidence is not a numeric type
+        ValueError: If confidence cannot be converted to a valid range
+    """
+    hypothesis_ref = f" (hypothesis #{hypothesis_index})" if hypothesis_index is not None else ""
+
+    # Check type - must be numeric
+    if not isinstance(confidence, (int, float)):
+        raise TypeError(
+            f"Confidence value must be numeric (int or float), got {type(confidence).__name__}{hypothesis_ref}"
+        )
+
+    # Check for NaN or infinity
+    if isinstance(confidence, float):
+        if confidence != confidence:  # NaN check
+            raise ValueError(f"Confidence cannot be NaN{hypothesis_ref}")
+        if confidence in (float('inf'), float('-inf')):
+            raise ValueError(f"Confidence cannot be infinite{hypothesis_ref}")
+
+    # Convert to float and clamp to valid range [0.0, 1.0]
+    try:
+        normalized_confidence = float(confidence)
+        # Clamp to valid range
+        normalized_confidence = max(0.0, min(1.0, normalized_confidence))
+        return normalized_confidence
+    except (ValueError, OverflowError) as e:
+        raise ValueError(f"Confidence value '{confidence}' is invalid{hypothesis_ref}: {e}")
+
+
 def _calculate_hypothesis_confidence(
     hypothesis: Dict[str, Any],
     total_observations: int,
@@ -492,14 +532,38 @@ def rank_hypotheses(
     """
     Rank and update hypotheses based on new evidence.
 
+    This function validates confidence values to prevent type coercion vulnerabilities.
+    Each hypothesis must have a numeric confidence value (int or float) between 0.0 and 1.0.
+    Invalid confidence types will raise TypeError, while out-of-range values are
+    automatically clamped to the valid range [0.0, 1.0].
+
     Args:
-        hypotheses (List[Dict]): List of existing hypotheses
+        hypotheses (List[Dict]): List of existing hypotheses. Each hypothesis should
+            be a dictionary with at least:
+            - "hypothesis" (str): The hypothesis text
+            - "confidence" (int|float): Numeric confidence value (0.0-1.0)
         new_evidence (List[str]): New evidence to consider
         reasoning_chain (Optional[ReasoningChain]): An optional ReasoningChain
             to add steps to
 
     Returns:
-        List[Dict]: Updated hypotheses with adjusted confidence scores
+        List[Dict]: Updated hypotheses with adjusted confidence scores (0.0-1.0)
+
+    Raises:
+        TypeError: If any hypothesis confidence is not numeric (int or float)
+        ValueError: If any hypothesis confidence is NaN or infinite
+
+    Examples:
+        >>> hypotheses = [
+        ...     {"hypothesis": "Server overload", "confidence": 0.7},
+        ...     {"hypothesis": "Network issue", "confidence": 0.3}
+        ... ]
+        >>> evidence = ["High CPU usage", "Slow response times"]
+        >>> result = rank_hypotheses(hypotheses, evidence, None)
+        >>> len(result)
+        2
+        >>> all(0.0 <= h["confidence"] <= 1.0 for h in result)
+        True
     """
     if not hypotheses:
         if reasoning_chain:
@@ -516,9 +580,12 @@ def rank_hypotheses(
 
     updated_hypotheses = []
 
-    for hypothesis in hypotheses:
+    for index, hypothesis in enumerate(hypotheses):
         # Create a copy to avoid modifying original
         updated_hypothesis = hypothesis.copy()
+
+        # Validate confidence value to prevent type coercion vulnerabilities
+        validated_confidence = _validate_confidence_value(hypothesis.get("confidence"), index)
 
         # Calculate evidence support score
         evidence_support = 0.0
@@ -541,11 +608,9 @@ def rank_hypotheses(
         # Average evidence support
         avg_evidence_support = evidence_support / total_evidence_score if total_evidence_score > 0 else 0.0
 
-        # Update confidence based on evidence
+        # Update confidence based on evidence (now using validated confidence)
         confidence_multiplier = 1.0 + (0.5 * avg_evidence_support)
-            # Boost confidence based on evidence
-        updated_hypothesis["confidence"] = min(1.0,
-                                               hypothesis["confidence"] * confidence_multiplier)
+        updated_hypothesis["confidence"] = min(1.0, validated_confidence * confidence_multiplier)
 
         # Add evidence to hypothesis
         if "supporting_evidence" not in updated_hypothesis:
