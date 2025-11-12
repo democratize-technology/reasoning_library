@@ -360,26 +360,63 @@ class TestInputInjectionVulnerabilities:
 
     def test_logging_injection_prevention(self):
         """
-        FAILING TEST: Tests for log injection vulnerabilities
+        FAILING TEST: Tests for log injection vulnerabilities in ReasoningChain
 
-        Ensures user input doesn't poison logs.
+        Ensures user input doesn't poison logs through ReasoningChain summary generation.
         """
-        # Malicious log injection strings
+        from reasoning_library.core import ReasoningStep, ReasoningChain
+
+        # Malicious log injection strings that could poison logs if output is logged
         injection_strings = [
-            "Normal input\n[ERROR] System compromised!",
-            "Valid input\r\n[CRITICAL] Security breach detected",
-            "Input with\x0a[WARN] Fake warning message",
-            "Data\x0d[INFO] Injection successful"
+            "Normal input\n[ERROR] System compromised by admin!",
+            "Valid data\r\n[CRITICAL] Security breach detected",
+            "Result\x0a[WARN] Fake warning: User is attacker",
+            "Analysis\x0d[INFO] Privilege escalation successful"
         ]
 
-        # Test if any function could be vulnerable to log injection
-        # This is a documentation test - actual vulnerabilities would be in logging code
         for injection in injection_strings:
-            if '\n' in injection or '\r' in injection:
-                # Contains newline characters that could poison logs
-                # Any logging of this input should be sanitized
-                pass
-                # Document the potential vulnerability
+            chain = ReasoningChain()
+
+            # Add a step with malicious input that could poison logs
+            chain.add_step(
+                stage="Test Stage",
+                description="Test description",
+                result=injection,  # This contains log injection payload
+                evidence=f"Evidence: {injection}",  # This too
+                assumptions=[f"Assumption: {injection}"]  # And this
+            )
+
+            # Generate summary - if this gets logged, it could poison logs
+            summary = chain.get_summary()
+
+            # Check that the injection payload has been sanitized (not containing the original malicious content)
+            if injection in summary:
+                pytest.fail(f"LOG INJECTION VULNERABILITY: Summary contains raw injection payload: {injection}")
+
+            # Check that the dangerous log injection patterns have been blocked in user input portions
+            summary_lines = summary.split('\n')
+            for line in summary_lines:
+                # If this is a user content line (not structural)
+                if any(keyword in line for keyword in ["Result:", "Evidence:", "Assumptions:"]):
+                    # Check that dangerous log levels have been blocked
+                    if any(level in line for level in ["[ERROR]", "[CRITICAL]", "[WARN]", "[INFO]"]):
+                        pytest.fail(f"LOG INJECTION VULNERABILITY: Malicious log level found in user content: {line}")
+
+                    # Verify that log injection attempts have been properly blocked
+                    if "[LOG_LEVEL_BLOCKED]" in line:
+                        # Good - the log injection was blocked
+                        pass
+
+            # Verify that newlines from user input have been normalized to spaces
+            # The user input "Normal input\n[ERROR]" should become "Normal input [LOG_LEVEL_BLOCKED]"
+            if "Normal input" in summary and "System compromised" in summary:
+                # The newline should be removed/normalized and the log level blocked
+                expected_sanitized = "Normal input [LOG_LEVEL_BLOCKED] System compromised by admin!"
+                if expected_sanitized in summary:
+                    # Good - the newline was sanitized to a space and log level blocked
+                    pass
+                else:
+                    pytest.fail("LOG INJECTION VULNERABILITY: User input newlines not properly sanitized")
 
     def test_cross_site_scripting_prevention(self):
         """

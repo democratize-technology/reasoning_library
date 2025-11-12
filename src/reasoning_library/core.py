@@ -414,7 +414,12 @@ def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
         sanitized = re.sub(r'exec\s*\(', 'BLOCKED', sanitized)      # Block exec attempts
 
         # Remove newlines and other control characters that could poison logs
-        sanitized = re.sub(r'[\r\n\t]', ' ', sanitized)
+        # CRITICAL FIX: Prevent log injection by normalizing newlines and control chars
+        sanitized = re.sub(r'[\r\n\t]', ' ', sanitized)  # Convert newlines/tabs to spaces
+        sanitized = re.sub(r'\s+', ' ', sanitized)       # Normalize multiple spaces
+
+        # Remove potential ANSI escape sequences that could poison terminal logs
+        sanitized = re.sub(r'\x1b\[[0-9;]*m', '', sanitized)  # Remove ANSI color codes
 
         return sanitized.strip()
 
@@ -758,24 +763,81 @@ class ReasoningChain:
         self.steps.append(step)
         return step
 
+    def _sanitize_reasoning_input(self, text: Any) -> str:
+        """
+        SECURE: Sanitize reasoning input to prevent log injection attacks.
+
+        Args:
+            text: Input text to sanitize
+
+        Returns:
+            Sanitized text safe for logging
+        """
+        if not isinstance(text, str):
+            return str(text)
+
+        # Use the existing sanitize_text_input function (defined in _safe_copy_spec context)
+        def sanitize_text_input_for_reasoning(text: Any, max_length: int = 1000) -> str:
+            """SECURE: Sanitize text inputs to prevent injection attacks."""
+            if not isinstance(text, str):
+                return ""
+
+            # Truncate to reasonable length
+            text = text[:max_length]
+
+            # Remove dangerous characters that could be used for injection
+            sanitized = re.sub(r'[<>"\'`]', '', text)  # Remove HTML/JS injection characters
+            sanitized = re.sub(r'[{}]', '', sanitized)  # Remove template injection characters
+            sanitized = re.sub(r'\${[^}]*}', '', sanitized)  # Remove ${...} patterns
+            sanitized = re.sub(r'%[sd]', '', sanitized)      # Remove %s, %d patterns
+            sanitized = re.sub(r'__import__\s*\(', 'BLOCKED', sanitized)  # Block import attempts
+            sanitized = re.sub(r'eval\s*\(', 'BLOCKED', sanitized)      # Block eval attempts
+            sanitized = re.sub(r'exec\s*\(', 'BLOCKED', sanitized)      # Block exec attempts
+
+            # CRITICAL FIX: Remove log injection patterns that could poison logs
+            # Block common log level patterns that could be used for log injection
+            sanitized = re.sub(r'\[(ERROR|CRITICAL|WARN|WARNING|INFO|DEBUG|TRACE|FATAL)\]', '[LOG_LEVEL_BLOCKED]', sanitized)
+
+            # Remove newlines and other control characters that could poison logs
+            # CRITICAL FIX: Prevent log injection by normalizing newlines and control chars
+            sanitized = re.sub(r'[\r\n\t]', ' ', sanitized)  # Convert newlines/tabs to spaces
+            sanitized = re.sub(r'\s+', ' ', sanitized)       # Normalize multiple spaces
+
+            # Remove potential ANSI escape sequences that could poison terminal logs
+            sanitized = re.sub(r'\x1b\[[0-9;]*m', '', sanitized)  # Remove ANSI color codes
+
+            return sanitized.strip()
+
+        return sanitize_text_input_for_reasoning(text, max_length=200)
+
     def get_summary(self) -> str:
         """
-        Generates a summary of the reasoning chain.
+        SECURE: Generates a summary of the reasoning chain with log injection prevention.
+
+        All user input is sanitized to prevent log poisoning attacks.
         """
         summary_parts = ["Reasoning Chain Summary:"]
         for step in self.steps:
+            # Sanitize all user-provided input to prevent log injection
+            safe_stage = self._sanitize_reasoning_input(step.stage)
+            safe_description = self._sanitize_reasoning_input(step.description)
+            safe_result = self._sanitize_reasoning_input(step.result)
+            safe_evidence = self._sanitize_reasoning_input(step.evidence) if step.evidence else ""
+            safe_assumptions = [self._sanitize_reasoning_input(assumption) for assumption in step.assumptions] if step.assumptions else []
+            safe_metadata = str(step.metadata) if step.metadata else ""
+
             summary_parts.append(
-                f"  Step {step.step_number} ({step.stage}): {step.description}"
+                f"  Step {step.step_number} ({safe_stage}): {safe_description}"
             )
-            summary_parts.append(f"    Result: {step.result}")
+            summary_parts.append(f"    Result: {safe_result}")
             if step.confidence is not None:
                 summary_parts.append(f"    Confidence: {step.confidence:.2f}")
-            if step.evidence:
-                summary_parts.append(f"    Evidence: {step.evidence}")
-            if step.assumptions:
-                summary_parts.append(f"    Assumptions: {', '.join(step.assumptions)}")
-            if step.metadata:
-                summary_parts.append(f"    Metadata: {step.metadata}")
+            if safe_evidence:
+                summary_parts.append(f"    Evidence: {safe_evidence}")
+            if safe_assumptions:
+                summary_parts.append(f"    Assumptions: {', '.join(safe_assumptions)}")
+            if safe_metadata:
+                summary_parts.append(f"    Metadata: {safe_metadata}")
         return "\n".join(summary_parts)
 
     def clear(self) -> None:
