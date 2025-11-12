@@ -6,6 +6,7 @@ This test demonstrates the bug where non-numeric confidence values cause issues.
 import pytest
 from src.reasoning_library.abductive import rank_hypotheses
 from src.reasoning_library.core import ReasoningChain
+from src.reasoning_library.exceptions import ValidationError
 
 
 class TestTypeCoercionBug:
@@ -23,8 +24,8 @@ class TestTypeCoercionBug:
         new_evidence = ["Server CPU at 95%"]
         reasoning_chain = ReasoningChain()
 
-        # This should raise a TypeError or handle gracefully, but currently crashes
-        with pytest.raises((TypeError, ValueError)):
+        # This should raise a ValidationError with improved error handling
+        with pytest.raises(ValidationError):
             rank_hypotheses(hypotheses, new_evidence, reasoning_chain)
 
     def test_none_confidence_value_should_fail_gracefully(self):
@@ -38,8 +39,8 @@ class TestTypeCoercionBug:
         new_evidence = ["Database connection timeout"]
         reasoning_chain = ReasoningChain()
 
-        # This should raise a TypeError or handle gracefully
-        with pytest.raises((TypeError, ValueError)):
+        # This should raise a ValidationError with improved error handling
+        with pytest.raises(ValidationError):
             rank_hypotheses(hypotheses, new_evidence, reasoning_chain)
 
     def test_dict_confidence_value_should_fail_gracefully(self):
@@ -53,8 +54,8 @@ class TestTypeCoercionBug:
         new_evidence = ["Network latency increased"]
         reasoning_chain = ReasoningChain()
 
-        # This should raise a TypeError or handle gracefully
-        with pytest.raises((TypeError, ValueError)):
+        # This should raise a ValidationError with improved error handling
+        with pytest.raises(ValidationError):
             rank_hypotheses(hypotheses, new_evidence, reasoning_chain)
 
     def test_list_confidence_value_should_fail_gracefully(self):
@@ -68,8 +69,8 @@ class TestTypeCoercionBug:
         new_evidence = ["Memory usage steadily increasing"]
         reasoning_chain = ReasoningChain()
 
-        # This should raise a TypeError or handle gracefully
-        with pytest.raises((TypeError, ValueError)):
+        # This should raise a ValidationError with improved error handling
+        with pytest.raises(ValidationError):
             rank_hypotheses(hypotheses, new_evidence, reasoning_chain)
 
     def test_negative_confidence_should_be_handled(self):
@@ -129,8 +130,8 @@ class TestTypeCoercionBug:
         reasoning_chain = ReasoningChain()
 
         # Should either fail completely or skip invalid hypotheses
-        # Current implementation likely crashes
-        with pytest.raises((TypeError, ValueError)):
+        # New validation properly rejects invalid types
+        with pytest.raises(ValidationError):
             rank_hypotheses(hypotheses, new_evidence, reasoning_chain)
 
     def test_existing_functionality_should_still_work(self):

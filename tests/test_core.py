@@ -11,6 +11,7 @@ import time
 
 import pytest
 
+from reasoning_library.exceptions import ValidationError
 from reasoning_library.core import (
     COMMENT_PATTERN,
     ENHANCED_TOOL_REGISTRY,
@@ -310,16 +311,16 @@ class TestSecurityFeatures:
         """Test input validation in safe copy."""
 
         # Test invalid inputs
-        with pytest.raises(ValueError, match="Tool specification must be a dictionary"):
+        with pytest.raises(ValidationError, match="Tool specification must be a dictionary"):
             _safe_copy_spec("not a dict")
 
         with pytest.raises(
-            ValueError, match="Tool specification must contain 'function' key"
+            ValidationError, match="Tool specification must contain 'function' key"
         ):
             _safe_copy_spec({"type": "function"})
 
         with pytest.raises(
-            ValueError, match="Tool specification 'function' value must be a dictionary"
+            ValidationError, match="Tool specification 'function' value must be a dictionary"
         ):
             _safe_copy_spec({"type": "function", "function": "not a dict"})
 

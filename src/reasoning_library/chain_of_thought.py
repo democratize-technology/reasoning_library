@@ -12,6 +12,7 @@ from collections import OrderedDict
 from typing import Any, Dict, List, Optional
 
 from .core import ReasoningChain, tool_spec
+from .exceptions import ValidationError
 
 # Thread - safe conversation management with bounded storage
 _conversations: OrderedDict[str, ReasoningChain] = OrderedDict()
@@ -33,9 +34,9 @@ def _validate_conversation_id(conversation_id: str) -> str:
         ValueError: If conversation_id is invalid.
     """
     if not isinstance(conversation_id, str):
-        raise ValueError("conversation_id must be a string")
+        raise ValidationError("conversation_id must be a string")
     if not re.match(r"\A[a-zA-Z0-9_-]{1,64}\Z", conversation_id):
-        raise ValueError(
+        raise ValidationError(
             "Invalid conversation_id format. Must be 1-64 alphanumeric characters, "
           "underscores, or hyphens."
         )
@@ -112,7 +113,7 @@ def chain_of_thought_step(
     # Validate conversation_id to prevent injection attacks
     try:
         conversation_id = _validate_conversation_id(conversation_id)
-    except ValueError as e:
+    except ValidationError as e:
         return {
             "step_number": -1,
             "conversation_id": conversation_id,
@@ -166,7 +167,7 @@ def get_chain_summary(conversation_id: str) -> Dict[str, Any]:
     # Validate conversation_id to prevent injection attacks
     try:
         conversation_id = _validate_conversation_id(conversation_id)
-    except ValueError as e:
+    except ValidationError as e:
         return {
             "summary": f"Invalid conversation ID: {e}",
             "step_count": 0,
@@ -227,7 +228,7 @@ def clear_chain(conversation_id: str) -> Dict[str, Any]:
     # Validate conversation_id to prevent injection attacks
     try:
         conversation_id = _validate_conversation_id(conversation_id)
-    except ValueError as e:
+    except ValidationError as e:
         return {
             "message": f"Invalid conversation ID: {e}",
             "conversation_id": conversation_id,

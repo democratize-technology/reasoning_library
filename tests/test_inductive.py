@@ -20,6 +20,7 @@ except ImportError:
     print("⚠️  NumPy not available - some tests will be skipped")
 
 from reasoning_library.core import ReasoningChain
+from reasoning_library.exceptions import ValidationError
 from reasoning_library.inductive import (
     _assess_data_sufficiency,
     _calculate_arithmetic_confidence,
@@ -115,10 +116,10 @@ class TestInputValidation:
 
     def test_empty_sequence_validation(self):
         """Test validation of empty sequences."""
-        with pytest.raises(ValueError, match="Sequence cannot be empty"):
+        with pytest.raises(ValidationError, match="Sequence cannot be empty"):
             predict_next_in_sequence([], reasoning_chain=None)
 
-        with pytest.raises(ValueError, match="Sequence cannot be empty"):
+        with pytest.raises(ValidationError, match="Sequence cannot be empty"):
             find_pattern_description([], reasoning_chain=None)
 
     def test_invalid_sequence_type_validation(self):
@@ -127,12 +128,12 @@ class TestInputValidation:
 
         for invalid_input in invalid_inputs:
             with pytest.raises(
-                TypeError, match="Expected list/tuple/array for sequence"
+                ValidationError, match="Expected list/tuple/array for sequence"
             ):
                 predict_next_in_sequence(invalid_input, reasoning_chain=None)
 
             with pytest.raises(
-                TypeError, match="Expected list/tuple/array for sequence"
+                ValidationError, match="Expected list/tuple/array for sequence"
             ):
                 find_pattern_description(invalid_input, reasoning_chain=None)
 

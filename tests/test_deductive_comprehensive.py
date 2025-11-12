@@ -10,6 +10,7 @@ import sys
 import pytest
 
 from reasoning_library.core import ReasoningChain
+from reasoning_library.exceptions import ValidationError
 from reasoning_library.deductive import (
     apply_modus_ponens,
     chain_deductions,
@@ -46,13 +47,13 @@ class TestLogicalPrimitives:
 
     def test_logical_not_with_confidence_type_validation(self):
         """Test logical NOT with invalid input types."""
-        with pytest.raises(TypeError, match="Expected bool for p, got"):
+        with pytest.raises(ValidationError, match="Expected bool for p, got"):
             logical_not_with_confidence("not a bool")
 
-        with pytest.raises(TypeError, match="Expected bool for p, got"):
+        with pytest.raises(ValidationError, match="Expected bool for p, got"):
             logical_not_with_confidence(1)
 
-        with pytest.raises(TypeError, match="Expected bool for p, got"):
+        with pytest.raises(ValidationError, match="Expected bool for p, got"):
             logical_not_with_confidence(None)
 
     def test_logical_and_basic(self):
@@ -78,16 +79,16 @@ class TestLogicalPrimitives:
 
     def test_logical_and_with_confidence_type_validation(self):
         """Test logical AND with invalid input types."""
-        with pytest.raises(TypeError, match="Expected bool for p, got"):
+        with pytest.raises(ValidationError, match="Expected bool for p, got"):
             logical_and_with_confidence("not a bool", True)
 
-        with pytest.raises(TypeError, match="Expected bool for q, got"):
+        with pytest.raises(ValidationError, match="Expected bool for q, got"):
             logical_and_with_confidence(True, "not a bool")
 
-        with pytest.raises(TypeError, match="Expected bool for p, got"):
+        with pytest.raises(ValidationError, match="Expected bool for p, got"):
             logical_and_with_confidence(1, True)
 
-        with pytest.raises(TypeError, match="Expected bool for q, got"):
+        with pytest.raises(ValidationError, match="Expected bool for q, got"):
             logical_and_with_confidence(True, 1)
 
     def test_logical_or_basic(self):
@@ -113,10 +114,10 @@ class TestLogicalPrimitives:
 
     def test_logical_or_with_confidence_type_validation(self):
         """Test logical OR with invalid input types."""
-        with pytest.raises(TypeError, match="Expected bool for p, got"):
+        with pytest.raises(ValidationError, match="Expected bool for p, got"):
             logical_or_with_confidence("not a bool", True)
 
-        with pytest.raises(TypeError, match="Expected bool for q, got"):
+        with pytest.raises(ValidationError, match="Expected bool for q, got"):
             logical_or_with_confidence(True, "not a bool")
 
     def test_implies_basic(self):
@@ -143,10 +144,10 @@ class TestLogicalPrimitives:
 
     def test_implies_with_confidence_type_validation(self):
         """Test logical IMPLICATION with invalid input types."""
-        with pytest.raises(TypeError, match="Expected bool for p, got"):
+        with pytest.raises(ValidationError, match="Expected bool for p, got"):
             implies_with_confidence("not a bool", True)
 
-        with pytest.raises(TypeError, match="Expected bool for q, got"):
+        with pytest.raises(ValidationError, match="Expected bool for q, got"):
             implies_with_confidence(True, "not a bool")
 
 
@@ -218,10 +219,10 @@ class TestModusPonens:
 
     def test_check_modus_ponens_premises_with_confidence_type_validation(self):
         """Test Modus Ponens premise checking with invalid input types."""
-        with pytest.raises(TypeError, match="Expected bool for p, got"):
+        with pytest.raises(ValidationError, match="Expected bool for p, got"):
             check_modus_ponens_premises_with_confidence("not a bool", True)
 
-        with pytest.raises(TypeError, match="Expected bool for q, got"):
+        with pytest.raises(ValidationError, match="Expected bool for q, got"):
             check_modus_ponens_premises_with_confidence(True, "not a bool")
 
     def test_apply_modus_ponens_valid_inference(self):
@@ -441,13 +442,13 @@ class TestEdgeCasesAndErrorHandling:
     def test_boolean_coercion_resistance(self):
         """Test that functions resist implicit boolean coercion."""
         # These should raise TypeError, not silently convert to bool
-        with pytest.raises(TypeError):
+        with pytest.raises(ValidationError):
             logical_and_with_confidence(1, 0)  # Truthy/falsy but not bool
 
-        with pytest.raises(TypeError):
+        with pytest.raises(ValidationError):
             logical_or_with_confidence([], [1])  # Empty list is falsy
 
-        with pytest.raises(TypeError):
+        with pytest.raises(ValidationError):
             implies_with_confidence("true", "false")  # Strings
 
     def test_currying_with_reasoning_chain_parameter(self):

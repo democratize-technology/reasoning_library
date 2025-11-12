@@ -8,6 +8,7 @@ and the Modus Ponens rule, implemented using a functional programming style.
 from typing import Any, Callable, Optional, Tuple
 
 from .core import ReasoningChain, curry, tool_spec
+from .exceptions import ValidationError
 
 # --- Base Logical Primitives (Pure Functions) ---
 
@@ -29,10 +30,10 @@ def logical_not_with_confidence(p: bool) -> Tuple[bool, float]:
         tuple: (NOT p, confidence) where confidence is 1.0 for deterministic operation.
 
     Raises:
-        TypeError: If p is not a boolean.
+        ValidationError: If p is not a boolean.
     """
     if not isinstance(p, bool):
-        raise TypeError(f"Expected bool for p, got {type(p).__name__}")
+        raise ValidationError(f"Expected bool for p, got {type(p).__name__}")
     result = not p
     return result, 1.0
 
@@ -56,12 +57,12 @@ def logical_and_with_confidence(p: bool, q: bool) -> Tuple[bool, float]:
                 confidence) where confidence is 1.0 for deterministic operation.
 
     Raises:
-        TypeError: If p or q is not a boolean.
+        ValidationError: If p or q is not a boolean.
     """
     if not isinstance(p, bool):
-        raise TypeError(f"Expected bool for p, got {type(p).__name__}")
+        raise ValidationError(f"Expected bool for p, got {type(p).__name__}")
     if not isinstance(q, bool):
-        raise TypeError(f"Expected bool for q, got {type(q).__name__}")
+        raise ValidationError(f"Expected bool for q, got {type(q).__name__}")
     result = p and q
     return result, 1.0
 
@@ -84,12 +85,12 @@ def logical_or_with_confidence(p: bool, q: bool) -> Tuple[bool, float]:
         tuple: (p OR q, confidence) where confidence is 1.0 for deterministic operation.
 
     Raises:
-        TypeError: If p or q is not a boolean.
+        ValidationError: If p or q is not a boolean.
     """
     if not isinstance(p, bool):
-        raise TypeError(f"Expected bool for p, got {type(p).__name__}")
+        raise ValidationError(f"Expected bool for p, got {type(p).__name__}")
     if not isinstance(q, bool):
-        raise TypeError(f"Expected bool for q, got {type(q).__name__}")
+        raise ValidationError(f"Expected bool for q, got {type(q).__name__}")
     result = p or q
     return result, 1.0
 
@@ -114,12 +115,12 @@ def implies_with_confidence(p: bool, q: bool) -> Tuple[bool, float]:
                 confidence) where confidence is 1.0 for deterministic operation.
 
     Raises:
-        TypeError: If p or q is not a boolean.
+        ValidationError: If p or q is not a boolean.
     """
     if not isinstance(p, bool):
-        raise TypeError(f"Expected bool for p, got {type(p).__name__}")
+        raise ValidationError(f"Expected bool for p, got {type(p).__name__}")
     if not isinstance(q, bool):
-        raise TypeError(f"Expected bool for q, got {type(q).__name__}")
+        raise ValidationError(f"Expected bool for q, got {type(q).__name__}")
     result = logical_or(logical_not(p), q)
     return result, 1.0
 
@@ -150,12 +151,12 @@ def check_modus_ponens_premises_with_confidence(p: bool, q: bool) -> Tuple[bool,
                 confidence) where confidence is 1.0 for deterministic check.
 
     Raises:
-        TypeError: If p or q is not a boolean.
+        ValidationError: If p or q is not a boolean.
     """
     if not isinstance(p, bool):
-        raise TypeError(f"Expected bool for p, got {type(p).__name__}")
+        raise ValidationError(f"Expected bool for p, got {type(p).__name__}")
     if not isinstance(q, bool):
-        raise TypeError(f"Expected bool for q, got {type(q).__name__}")
+        raise ValidationError(f"Expected bool for q, got {type(q).__name__}")
     result = logical_and(implies(p, q), p)
     # For modus ponens premises: confidence is always 1.0 since it's a
     # deterministic logical check

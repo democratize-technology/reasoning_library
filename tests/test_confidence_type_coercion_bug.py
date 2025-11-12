@@ -6,6 +6,7 @@ This test shows the vulnerability at line 547 in abductive.py.
 import pytest
 from src.reasoning_library.abductive import rank_hypotheses
 from src.reasoning_library.core import ReasoningChain
+from src.reasoning_library.exceptions import ValidationError
 
 
 def test_type_coercion_bug_demonstration():
@@ -28,8 +29,8 @@ def test_type_coercion_bug_demonstration():
     new_evidence = ["Some evidence"]
     reasoning_chain = ReasoningChain()
 
-    # This should fail with TypeError due to string * float operation
-    with pytest.raises(TypeError):
+    # This should fail with ValidationError due to improved validation
+    with pytest.raises(ValidationError):
         rank_hypotheses(hypotheses, new_evidence, reasoning_chain)
 
 
@@ -46,8 +47,8 @@ def test_none_confidence_bug_demonstration():
     new_evidence = ["Some evidence"]
     reasoning_chain = ReasoningChain()
 
-    # This should fail with TypeError due to None * float operation
-    with pytest.raises(TypeError):
+    # This should fail with ValidationError due to improved validation
+    with pytest.raises(ValidationError):
         rank_hypotheses(hypotheses, new_evidence, reasoning_chain)
 
 

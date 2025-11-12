@@ -6,11 +6,12 @@ This test shows that the type coercion vulnerability has been fixed.
 import pytest
 from src.reasoning_library.abductive import rank_hypotheses
 from src.reasoning_library.core import ReasoningChain
+from src.reasoning_library.exceptions import ValidationError
 
 
-def test_string_confidence_now_raises_typeerror():
+def test_string_confidence_now_raises_validation_error():
     """
-    Test that string confidence values now raise a clear TypeError
+    Test that string confidence values now raise a clear ValidationError
     instead of causing cryptic multiplication errors.
     """
     hypotheses = [
@@ -22,20 +23,20 @@ def test_string_confidence_now_raises_typeerror():
     new_evidence = ["Some evidence"]
     reasoning_chain = ReasoningChain()
 
-    # Should raise a clear TypeError with helpful message
-    with pytest.raises(TypeError) as exc_info:
+    # Should raise a clear ValidationError with helpful message
+    with pytest.raises(ValidationError) as exc_info:
         rank_hypotheses(hypotheses, new_evidence, reasoning_chain)
 
     # Verify the error message is helpful
     error_msg = str(exc_info.value)
-    assert "Confidence value must be numeric" in error_msg
+    assert "Confidence value" in error_msg and "must be numeric" in error_msg
     assert "hypothesis #0" in error_msg
     assert "str" in error_msg
 
 
-def test_none_confidence_now_raises_typeerror():
+def test_none_confidence_now_raises_validation_error():
     """
-    Test that None confidence values now raise a clear TypeError.
+    Test that None confidence values now raise a clear ValidationError.
     """
     hypotheses = [
         {
@@ -46,12 +47,12 @@ def test_none_confidence_now_raises_typeerror():
     new_evidence = ["Some evidence"]
     reasoning_chain = ReasoningChain()
 
-    # Should raise a clear TypeError
-    with pytest.raises(TypeError) as exc_info:
+    # Should raise a clear ValidationError
+    with pytest.raises(ValidationError) as exc_info:
         rank_hypotheses(hypotheses, new_evidence, reasoning_chain)
 
     error_msg = str(exc_info.value)
-    assert "Confidence value must be numeric" in error_msg
+    assert "Confidence value" in error_msg and "must be numeric" in error_msg
     assert "NoneType" in error_msg
 
 

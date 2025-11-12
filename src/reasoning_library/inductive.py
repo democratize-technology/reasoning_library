@@ -12,6 +12,7 @@ import numpy as np
 import numpy.typing as npt
 
 from .core import ReasoningChain, curry, tool_spec
+from .exceptions import ValidationError, ComputationError, PatternDetectionError, TimeoutError
 
 # Performance optimization constants
 _LARGE_SEQUENCE_THRESHOLD = 100
@@ -35,10 +36,10 @@ def _validate_sequence_input(sequence: List[float], function_name: str) -> None:
         function_name (str): Name of the calling function for error messages
 
     Raises:
-        ValueError: If sequence fails security validation
+        ValidationError: If sequence fails security validation
     """
     if len(sequence) > _MAX_SEQUENCE_LENGTH:
-        raise ValueError(
+        raise ValidationError(
             f"{function_name}: Input sequence too large ({len(sequence)} elements). "
             f"Maximum allowed: {_MAX_SEQUENCE_LENGTH} elements. "
             "This restriction prevents DoS attacks."
@@ -47,13 +48,13 @@ def _validate_sequence_input(sequence: List[float], function_name: str) -> None:
     # Check for values that could cause computational issues
     for i, value in enumerate(sequence):
         if not np.isfinite(value):
-            raise ValueError(
+            raise ValidationError(
                 f"{function_name}: Invalid value at position {i}: {value}. "
                 "Only finite numbers are allowed."
             )
 
         if abs(value) > _VALUE_MAGNITUDE_LIMIT:
-            raise ValueError(
+            raise ValidationError(
                 f"{function_name}: Value magnitude too large at position {i}: {value}. "
                 f"Maximum allowed magnitude: {_VALUE_MAGNITUDE_LIMIT}. "
                 "This prevents overflow and performance issues."
@@ -376,16 +377,15 @@ def predict_next_in_sequence(
             None if no simple pattern is found.
 
     Raises:
-        TypeError: If sequence is not a list, tuple, or numpy array.
-        ValueError: If sequence is empty.
+        ValidationError: If sequence is not a list, tuple, or numpy array or is empty.
     """
     # Input validation
     if not isinstance(sequence, (list, tuple, np.ndarray)):
-        raise TypeError(
+        raise ValidationError(
             f"Expected list/tuple/array for sequence, got {type(sequence).__name__}"
         )
     if len(sequence) == 0:
-        raise ValueError("Sequence cannot be empty")
+        raise ValidationError("Sequence cannot be empty")
     stage = "Inductive Reasoning: Sequence Prediction"
     description = f"Attempting to predict next number in sequence: {sequence}"
     result = None
@@ -482,16 +482,15 @@ def find_pattern_description(
         str: A string describing the pattern, or 'No simple pattern found.'
 
     Raises:
-        TypeError: If sequence is not a list, tuple, or numpy array.
-        ValueError: If sequence is empty.
+        ValidationError: If sequence is not a list, tuple, or numpy array or is empty.
     """
     # Input validation
     if not isinstance(sequence, (list, tuple, np.ndarray)):
-        raise TypeError(
+        raise ValidationError(
             f"Expected list/tuple/array for sequence, got {type(sequence).__name__}"
         )
     if len(sequence) == 0:
-        raise ValueError("Sequence cannot be empty")
+        raise ValidationError("Sequence cannot be empty")
     stage = "Inductive Reasoning: Pattern Description"
     description = f"Attempting to describe pattern in sequence: {sequence}"
     result_str = "No simple pattern found."
@@ -1110,7 +1109,7 @@ def detect_recursive_pattern(
     """
     # CRITICAL #7: DoS Protection - Validate input (also handles type conversion)
     if not isinstance(sequence, (list, tuple, np.ndarray)):
-        raise TypeError(
+        raise ValidationError(
             f"Expected list / tuple / array for sequence, "
             f"got {type(sequence).__name__}"
         )
@@ -1163,8 +1162,9 @@ def detect_recursive_pattern(
                         assumptions=[f"Sequence follows {pattern_name.lower()} recurrence relation"]
                     )
                 return result
-        except Exception:
+        except (ValueError, TypeError, ZeroDivisionError, OverflowError, MemoryError) as e:
             # Continue to next pattern if current one fails
+            # Specific exceptions: computation errors, math errors, memory issues
             continue
 
     if reasoning_chain:

@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from collections import defaultdict
 
 from .core import ReasoningChain, curry, tool_spec
+from .exceptions import ValidationError
 
 
 def _validate_and_sanitize_input_size(
@@ -82,16 +83,16 @@ def _validate_confidence_value(confidence: Any, hypothesis_index: Optional[int] 
 
     # Check type - must be numeric
     if not isinstance(confidence, (int, float)):
-        raise TypeError(
-            f"Confidence value must be numeric (int or float), got {type(confidence).__name__}{hypothesis_ref}"
+        raise ValidationError(
+            f"Confidence value '{confidence}' must be numeric (int or float), got {type(confidence).__name__}{hypothesis_ref}"
         )
 
     # Check for NaN or infinity
     if isinstance(confidence, float):
         if confidence != confidence:  # NaN check
-            raise ValueError(f"Confidence cannot be NaN{hypothesis_ref}")
+            raise ValidationError(f"Confidence cannot be NaN{hypothesis_ref}")
         if confidence in (float('inf'), float('-inf')):
-            raise ValueError(f"Confidence cannot be infinite{hypothesis_ref}")
+            raise ValidationError(f"Confidence cannot be infinite{hypothesis_ref}")
 
     # Convert to float and clamp to valid range [0.0, 1.0]
     try:
@@ -100,7 +101,7 @@ def _validate_confidence_value(confidence: Any, hypothesis_index: Optional[int] 
         normalized_confidence = max(0.0, min(1.0, normalized_confidence))
         return normalized_confidence
     except (ValueError, OverflowError) as e:
-        raise ValueError(f"Confidence value '{confidence}' is invalid{hypothesis_ref}: {e}")
+        raise ValidationError(f"Confidence value '{confidence}' is invalid{hypothesis_ref}: {e}")
 
 
 def _calculate_hypothesis_confidence(

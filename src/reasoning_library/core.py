@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+from .exceptions import CacheError, ValidationError, ComputationError
+
 # Security constants and compiled patterns
 MAX_SOURCE_CODE_SIZE = 10000  # Prevent ReDoS attacks by limiting input size
 
@@ -129,8 +131,9 @@ def _get_math_detection_cached(func: Callable[...,
         content = f"{func_module}:{func_qualname}:{docstring}:{source_code}"
         func_id = hashlib.md5(content.encode()).hexdigest()
 
-    except Exception:
+    except (OSError, TypeError, ValueError, AttributeError, ImportError) as e:
         # Fallback to object ID if hashing fails (less safe but functional)
+        # Specific exceptions: import errors, type errors, value errors, attribute access errors
         func_id = str(id(func))
 
     # Thread - safe cache access with proper locking
@@ -421,16 +424,16 @@ def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
         Validated and safely copied tool specification
 
     Raises:
-        ValueError: If tool specification is invalid or missing required fields
+        ValidationError: If tool specification is invalid or missing required fields
     """
     if not isinstance(tool_spec, dict):
-        raise ValueError("Tool specification must be a dictionary")
+        raise ValidationError("Tool specification must be a dictionary")
 
     if "function" not in tool_spec:
-        raise ValueError("Tool specification must contain 'function' key")
+        raise ValidationError("Tool specification must contain 'function' key")
 
     if not isinstance(tool_spec["function"], dict):
-        raise ValueError("Tool specification 'function' value must be a dictionary")
+        raise ValidationError("Tool specification 'function' value must be a dictionary")
 
     def sanitize_text_input(text: Any, max_length: int = 1000) -> str:
         """SECURE: Sanitize text inputs to prevent injection attacks."""

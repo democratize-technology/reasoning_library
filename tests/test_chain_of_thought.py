@@ -22,6 +22,7 @@ from reasoning_library.chain_of_thought import (
     get_conversation_stats,
 )
 from reasoning_library.core import ReasoningChain
+from reasoning_library.exceptions import ValidationError
 
 
 class TestConversationIdValidation:
@@ -67,7 +68,7 @@ class TestConversationIdValidation:
 
         for conv_id in invalid_ids:
             with pytest.raises(
-                ValueError,
+                ValidationError,
                 match="Invalid conversation_id format|conversation_id must be a string",
             ):
                 _validate_conversation_id(conv_id)
@@ -85,7 +86,7 @@ class TestConversationIdValidation:
         ]
 
         for malicious_id in malicious_ids:
-            with pytest.raises(ValueError):
+            with pytest.raises(ValidationError):
                 _validate_conversation_id(malicious_id)
 
 
