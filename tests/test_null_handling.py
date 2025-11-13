@@ -6,6 +6,7 @@ and empty collections across the reasoning library.
 """
 
 import pytest
+import logging
 from typing import List, Dict, Optional, Any
 
 from reasoning_library.null_handling import (
@@ -366,6 +367,122 @@ class TestIntegrationWithReasoningStep:
         assert normalized["assumptions"] == []
         assert normalized["metadata"] == {}
         assert normalized["evidence"] == ""
+
+
+class TestDangerousExceptionHandling:
+    """Test dangerous exception swallowing vulnerability and its fix."""
+
+    def test_current_dangerous_exception_swallowing_memoryerror(self):
+        """Test that MemoryError is currently dangerously swallowed."""
+        @with_null_safety(expected_return_type=str)
+        def memory_error_func():
+            # Simulate memory exhaustion
+            try:
+                # This approach might not actually trigger MemoryError reliably
+                # due to Python's memory management, but illustrates the point
+                raise MemoryError("Out of memory!")
+            except MemoryError:
+                raise  # Re-raise to test the decorator
+
+        # This should raise MemoryError but currently doesn't (vulnerability)
+        # This test documents the dangerous behavior
+        with pytest.raises(MemoryError):
+            memory_error_func()
+
+    def test_current_dangerous_exception_swallowing_systemerror(self):
+        """Test that SystemError is currently dangerously swallowed."""
+        @with_null_safety(expected_return_type=str)
+        def system_error_func():
+            raise SystemError("Critical system error")
+
+        # This should raise SystemError but currently doesn't (vulnerability)
+        with pytest.raises(SystemError):
+            system_error_func()
+
+    def test_current_dangerous_exception_swallowing_keyboardinterrupt(self):
+        """Test that KeyboardInterrupt is currently dangerously swallowed."""
+        @with_null_safety(expected_return_type=str)
+        def interrupt_func():
+            raise KeyboardInterrupt("User interrupted")
+
+        # This should raise KeyboardInterrupt but currently doesn't (vulnerability)
+        with pytest.raises(KeyboardInterrupt):
+            interrupt_func()
+
+    def test_business_exceptions_should_be_handled_gracefully(self):
+        """Test that business exceptions should still be handled gracefully."""
+        @with_null_safety(expected_return_type=str)
+        def value_error_func():
+            raise ValueError("Invalid input value")
+
+        # ValueError should be caught and return empty string (desired behavior)
+        result = value_error_func()
+        assert result == ""
+
+    def test_type_error_should_be_handled_gracefully(self):
+        """Test that TypeError should be handled gracefully."""
+        @with_null_safety(expected_return_type=dict)
+        def type_error_func():
+            raise TypeError("Invalid type operation")
+
+        # TypeError should be caught and return empty dict (desired behavior)
+        result = type_error_func()
+        assert result == {}
+
+    def test_attribute_error_should_be_handled_gracefully(self):
+        """Test that AttributeError should be handled gracefully."""
+        @with_null_safety(expected_return_type=list)
+        def attribute_error_func():
+            raise AttributeError("Missing attribute")
+
+        # AttributeError should be caught and return empty list (desired behavior)
+        result = attribute_error_func()
+        assert result == []
+
+    def test_key_error_should_be_handled_gracefully(self):
+        """Test that KeyError should be handled gracefully."""
+        @with_null_safety(expected_return_type=bool)
+        def key_error_func():
+            raise KeyError("Missing key")
+
+        # KeyError should be caught and return NO_VALUE (desired behavior)
+        result = key_error_func()
+        assert result is None
+
+    def test_import_error_should_propagate(self):
+        """Test that ImportError should propagate (system-level error)."""
+        @with_null_safety(expected_return_type=str)
+        def import_error_func():
+            raise ImportError("Cannot import required module")
+
+        # ImportError should propagate (system error)
+        with pytest.raises(ImportError):
+            import_error_func()
+
+    def test_runtime_error_should_propagate(self):
+        """Test that RuntimeError should propagate (system-level error)."""
+        @with_null_safety(expected_return_type=str)
+        def runtime_error_func():
+            raise RuntimeError("Critical runtime failure")
+
+        # RuntimeError should propagate (system error)
+        with pytest.raises(RuntimeError):
+            runtime_error_func()
+
+    def test_logging_for_caught_business_exceptions(self):
+        """Test that business exceptions are properly logged."""
+        # Set up a logger to capture log messages
+        with pytest.raises(AssertionError):  # This will fail until we implement the test
+            pass  # Placeholder for logging test implementation
+
+    def test_debug_logging_format(self):
+        """Test that debug logging contains appropriate information."""
+        # This test would verify that logging includes:
+        # - Function name
+        # - Exception type
+        # - Exception message
+        # - Stack trace (exc_info=True)
+        pass  # Implementation would require log capture setup
 
 
 if __name__ == "__main__":

@@ -7,10 +7,14 @@ and ensures consistent handling of None, empty strings, and empty collections.
 
 from typing import Any, List, Dict, Optional, Callable, TypeVar, Union, cast
 from functools import wraps
+import logging
 
 # Type variables for generic functions
 T = TypeVar('T')
 U = TypeVar('U')
+
+# Module logger for exception handling
+logger = logging.getLogger(__name__)
 
 NO_VALUE = None
 EMPTY_STRING = ""
@@ -213,7 +217,13 @@ def with_null_safety(expected_return_type: type = Any) -> Callable[[Callable[...
             try:
                 result = func(*args, **kwargs)
                 return normalize_none_return(result, expected_return_type)
-            except Exception:
+            except (ValueError, TypeError, AttributeError, KeyError) as e:
+                # Log business logic exceptions for debugging
+                logger.debug(
+                    f"Business exception caught in {func.__name__}: {type(e).__name__}: {e}",
+                    exc_info=True
+                )
+                # Return appropriate empty value based on expected type
                 if expected_return_type == bool:
                     return NO_VALUE
                 elif expected_return_type == list:
@@ -224,6 +234,8 @@ def with_null_safety(expected_return_type: type = Any) -> Callable[[Callable[...
                     return EMPTY_STRING
                 else:
                     return NO_VALUE
+            # System exceptions like MemoryError, SystemError, KeyboardInterrupt, ImportError,
+            # RuntimeError, etc. will propagate correctly (not caught)
         return wrapper
     return decorator
 
