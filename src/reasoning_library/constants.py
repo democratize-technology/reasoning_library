@@ -22,17 +22,19 @@ The constants are organized by functional area:
 # These limits prevent denial-of-service attacks from malicious inputs
 # while maintaining reasonable functionality for legitimate use cases.
 
-MAX_SEQUENCE_LENGTH = 10000
+MAX_SEQUENCE_LENGTH = 1000
 """
 Maximum allowed sequence length to prevent DoS attacks.
 
 Chosen because:
-- 10K elements is sufficient for most legitimate pattern detection tasks
-- Prevents memory exhaustion from extremely large sequences
-- Maintains reasonable computation times (O(n) algorithms)
+- 1K elements is sufficient for legitimate pattern detection tasks
+- Prevents memory exhaustion from large sequences (CRIT-002 fix)
+- Maintains reasonable computation times even for recursive sequences
 - Larger sequences would likely indicate malicious input or misuse
+- Reduces attack surface for algorithmic DoS vulnerabilities
 
 Security impact: Prevents memory exhaustion and CPU exhaustion attacks.
+Limits exposure to exponential computation attacks in recursive sequences.
 """
 
 COMPUTATION_TIMEOUT = 5.0
@@ -46,6 +48,35 @@ Chosen because:
 - Allows for complex recursive patterns while preventing abuse
 
 Security impact: Prevents CPU exhaustion attacks and ensures responsive service.
+"""
+
+# CRIT-002: Algorithmic DoS Protection Constants
+# ----------------------------------------------
+
+EXPONENTIAL_GROWTH_THRESHOLD = 2.0
+"""
+Growth ratio threshold to detect exponential sequences for DoS protection.
+
+Chosen because:
+- Ratio of 2.0 indicates exponential growth (each term doubles previous)
+- Helps identify sequences that will cause computational explosion
+- Recursive sequences with ratio > 2.0 can quickly exceed value limits
+- Early detection prevents excessive computation
+
+Security impact: Prevents algorithmic DoS from exponential sequence attacks.
+"""
+
+EXPONENTIAL_GROWTH_WINDOW = 5
+"""
+Window size to check for exponential growth patterns.
+
+Chosen because:
+- 5 consecutive elements provide reliable exponential growth detection
+- Short enough to catch growth early in the sequence
+- Long enough to avoid false positives from random fluctuations
+- Balances detection accuracy with computational overhead
+
+Security impact: Early detection of exponential sequences prevents DoS attacks.
 """
 
 MAX_MEMORY_ELEMENTS = 5000
@@ -851,18 +882,19 @@ removing enough entries to prevent immediate overflow.
 # Computation Checkpoint Parameters
 # ---------------------------------
 
-TIMEOUT_CHECK_INTERVAL = 1000
+TIMEOUT_CHECK_INTERVAL = 100
 """
 Check timeout every N iterations to prevent DoS attacks.
 
 Chosen because:
-- Every 1000 iterations provides good balance between performance and security
-- Prevents excessive timeout checking overhead
-- Ensures timely detection of timeout conditions
-- Standard interval for loop-based timeout checking
+- Every 100 iterations provides better protection against fast attacks (CRIT-002 fix)
+- Prevents excessive timeout checking overhead while being more secure
+- Ensures timely detection of timeout conditions in exponential computations
+- Reduces window for DoS attacks in recursive sequence algorithms
 
 Reasoning: Timeout checking should be frequent enough to prevent DoS attacks
-but not so frequent as to impact performance significantly.
+even against fast-growing exponential sequences. 100 iterations balances
+security with performance for recursive computations.
 """
 
 # =============================================================================

@@ -23,6 +23,11 @@ from .constants import (
     COMPUTATION_TIMEOUT,
     VALUE_MAGNITUDE_LIMIT,
 
+    # CRIT-002: Algorithmic DoS Protection Constants
+    TIMEOUT_CHECK_INTERVAL,
+    EXPONENTIAL_GROWTH_THRESHOLD,
+    EXPONENTIAL_GROWTH_WINDOW,
+
     # Confidence calculation parameters
     BASE_CONFIDENCE_ARITHMETIC,
     BASE_CONFIDENCE_GEOMETRIC,
@@ -78,6 +83,10 @@ def _validate_sequence_input(sequence: List[float], function_name: str) -> None:
     Raises:
         ValidationError: If sequence fails security validation
     """
+    # Basic validation for type and emptiness (maintains compatibility)
+    _validate_basic_sequence_input(sequence)
+
+    # CRIT-002: Security validation for DoS protection
     if len(sequence) > MAX_SEQUENCE_LENGTH:
         raise ValidationError(
             f"{function_name}: Input sequence too large ({len(sequence)} elements). "
@@ -98,6 +107,60 @@ def _validate_sequence_input(sequence: List[float], function_name: str) -> None:
                 f"Maximum allowed magnitude: {VALUE_MAGNITUDE_LIMIT}. "
                 "This prevents overflow and performance issues."
             )
+
+    # CRIT-002: Check for exponential growth patterns that could cause DoS
+    _detect_exponential_growth_sequence(sequence, function_name)
+
+
+def _detect_exponential_growth_sequence(sequence: List[float], function_name: str) -> None:
+    """
+    CRIT-002: Detect exponential growth patterns that could cause algorithmic DoS.
+
+    Identifies sequences with exponential growth that could lead to computational
+    explosion in recursive pattern detection algorithms.
+
+    Args:
+        sequence (List[float]): Input sequence to check
+        function_name (str): Name of the calling function for error messages
+
+    Raises:
+        ValidationError: If exponential growth pattern is detected
+    """
+    if len(sequence) < EXPONENTIAL_GROWTH_WINDOW:
+        return  # Not enough data to detect exponential growth
+
+    # Check for consistent exponential growth in sliding windows
+    for i in range(len(sequence) - EXPONENTIAL_GROWTH_WINDOW + 1):
+        window = sequence[i:i + EXPONENTIAL_GROWTH_WINDOW]
+
+        # Calculate growth ratios between consecutive elements
+        growth_ratios = []
+        for j in range(1, len(window)):
+            prev_val = abs(window[j - 1])
+            curr_val = abs(window[j])
+
+            # Skip zero values to avoid division by zero
+            if prev_val < NUMERICAL_STABILITY_THRESHOLD:
+                continue
+
+            ratio = curr_val / prev_val
+            growth_ratios.append(ratio)
+
+        # If we have enough growth ratios and they show exponential pattern
+        if len(growth_ratios) >= EXPONENTIAL_GROWTH_WINDOW - 1:
+            avg_growth = sum(growth_ratios) / len(growth_ratios)
+
+            # Check if average growth exceeds exponential threshold
+            if avg_growth > EXPONENTIAL_GROWTH_THRESHOLD:
+                # Verify consistency (all ratios should be reasonably close)
+                max_deviation = max(abs(r - avg_growth) for r in growth_ratios)
+                if max_deviation < avg_growth * 0.3:  # Allow 30% deviation
+                    raise ValidationError(
+                        f"{function_name}: Exponential growth detected (growth factor: {avg_growth:.2f}). "
+                        f"This indicates a potential DoS attack. "
+                        f"Sequences with growth factor > {EXPONENTIAL_GROWTH_THRESHOLD} are rejected "
+                        "to prevent computational explosion in recursive algorithms."
+                    )
 
 
 def _create_computation_timeout(start_time: float, function_name: str) -> None:
@@ -517,8 +580,8 @@ def predict_next_in_sequence(
     Raises:
         ValidationError: If sequence is not a list, tuple, or numpy array or is empty.
     """
-    # Input validation
-    _validate_basic_sequence_input(sequence)
+    # CRIT-002: Enhanced input validation for DoS protection
+    _validate_sequence_input(sequence, "predict_next_in_sequence")
 
     stage = "Inductive Reasoning: Sequence Prediction"
     description = f"Attempting to predict next number in sequence: {sequence}"
@@ -585,13 +648,8 @@ def find_pattern_description(
     Raises:
         ValidationError: If sequence is not a list, tuple, or numpy array or is empty.
     """
-    # Input validation
-    if not isinstance(sequence, (list, tuple, np.ndarray)):
-        raise ValidationError(
-            f"Expected list/tuple/array for sequence, got {type(sequence).__name__}"
-        )
-    if len(sequence) == 0:
-        raise ValidationError("Sequence cannot be empty")
+    # CRIT-002: Enhanced input validation for DoS protection
+    _validate_sequence_input(sequence, "find_pattern_description")
     stage = "Inductive Reasoning: Pattern Description"
     description = f"Attempting to describe pattern in sequence: {sequence}"
     result_str = "No simple pattern found."
@@ -774,8 +832,8 @@ def detect_fibonacci_pattern(sequence: List[float],
     # CRITICAL #7: Protected computation with timeout checks
     try:
         for i in range(2, len(actual_sequence)):
-            # Check timeout every 1000 iterations to prevent DoS
-            if i % 1000 == 0:
+            # CRIT-002: Check timeout every N iterations to prevent DoS (reduced frequency)
+            if i % TIMEOUT_CHECK_INTERVAL == 0:
                 _create_computation_timeout(start_time, "detect_fibonacci_pattern")
 
             # Check for overflow before performing operation
@@ -845,8 +903,8 @@ def detect_lucas_pattern(sequence: List[float],
     # CRITICAL #7: Protected computation with timeout checks
     try:
         for i in range(2, len(actual_sequence)):
-            # Check timeout every 1000 iterations to prevent DoS
-            if i % 1000 == 0:
+            # CRIT-002: Check timeout every N iterations to prevent DoS (reduced frequency)
+            if i % TIMEOUT_CHECK_INTERVAL == 0:
                 _create_computation_timeout(start_time, "detect_lucas_pattern")
 
             # Check for overflow before performing operation
@@ -924,8 +982,8 @@ def detect_tribonacci_pattern(sequence: List[float],
     # CRITICAL #7: Protected computation with timeout checks
     try:
         for i in range(3, len(actual_sequence)):
-            # Check timeout every 1000 iterations to prevent DoS
-            if i % 1000 == 0:
+            # CRIT-002: Check timeout every N iterations to prevent DoS (reduced frequency)
+            if i % TIMEOUT_CHECK_INTERVAL == 0:
                 _create_computation_timeout(start_time, "detect_tribonacci_pattern")
 
             # Check for overflow before performing operation
