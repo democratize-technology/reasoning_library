@@ -741,7 +741,14 @@ def get_tool_specs() -> List[Dict[str, Any]]:
     Thread - safe: Uses _registry_lock to prevent race conditions during iteration.
     """
     with _registry_lock:
-        return [getattr(func, "tool_spec") for func in TOOL_REGISTRY.copy()]
+        tool_specs = []
+        for func in TOOL_REGISTRY.copy():
+            if hasattr(func, "tool_spec"):
+                tool_spec = getattr(func, "tool_spec", {})
+                # Only include non-None, non-empty tool_specs
+                if tool_spec:
+                    tool_specs.append(tool_spec)
+        return tool_specs
 
 
 def get_openai_tools() -> List[Dict[str, Any]]:
