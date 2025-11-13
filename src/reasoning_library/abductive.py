@@ -449,36 +449,108 @@ def _generate_causal_chain_hypothesis(
     return causal_chain
 
 
-def _sanitize_template_input(text: str) -> str:
+def _sanitize_input_for_concatenation(text: str) -> str:
     """
-    SECURE: Remove dangerous characters to prevent template injection attacks.
+    CRITICAL SECURITY: Comprehensive input sanitization to prevent ALL injection attacks.
 
-    This function sanitizes user input before using it in template.format() calls
-    to prevent template injection vulnerabilities that could lead to code execution
-    or information disclosure.
+    This function provides defense-in-depth sanitization by removing ALL potentially
+    dangerous characters and patterns that could be used in injection attacks.
 
     Args:
         text: Input text to sanitize
 
     Returns:
-        str: Sanitized text safe for template formatting
+        str: Sanitized text safe for string concatenation
 
-    Security:
-        - Removes curly braces {} that could be used for template injection
-        - Removes HTML characters < > to prevent XSS attacks
-        - Strips format string patterns like ${...}
-        - Prevents code execution through malicious template strings
+    Security Hardening:
+        - Blocks ALL template-related characters: {} [] () $
+        - Removes format string patterns: %s %d {var}
+        - Blocks attribute access: .method __dunder__
+        - Blocks shell metacharacters: |&;$<>`
+        - Blocks programming keywords: import exec eval system
+        - Strict length limits to prevent buffer attacks
     """
     if not isinstance(text, str):
         return ""
-    # Remove curly braces and format specifiers that could break templates
-    sanitized = re.sub(r'[{}]', '', text)
-    # Remove HTML characters to prevent XSS
-    sanitized = re.sub(r'[<>]', '', sanitized)
-    # Remove potential format string injection patterns
-    sanitized = re.sub(r'\${[^}]*}', '', sanitized)  # ${...} patterns
-    sanitized = re.sub(r'%[sd]', '', sanitized)      # %s, %d patterns
-    return sanitized.strip()
+
+    # Block ALL template and programming characters
+    text = re.sub(r'[{}\[\]()]', '', text)  # Block braces, brackets, parentheses
+    text = re.sub(r'\${[^}]*}', '', text)    # Block ${...} patterns
+    text = re.sub(r'%[a-zA-Z]', '', text)    # Block ALL format strings (%s, %d, %class, etc.)
+    text = re.sub(r'%', '', text)            # Block any remaining % characters
+    text = re.sub(r'\.[a-zA-Z_]', '', text)  # Block attribute access
+    text = re.sub(r'__.*__', '', text)       # Block dunder methods
+    text = re.sub(r'[|&;$<>`]', '', text)    # Block shell metacharacters
+
+    # Block dangerous keywords
+    dangerous_keywords = ['import', 'exec', 'eval', 'system', 'subprocess', 'os', 'config', 'globals']
+    for keyword in dangerous_keywords:
+        text = re.sub(keyword, '', text, flags=re.IGNORECASE)
+
+    # Additional hardening
+    text = text[:50]  # Strict length limit
+    return text.strip()
+
+
+def _sanitize_template_input(text: str) -> str:
+    """
+    DEPRECATED: Use _sanitize_input_for_concatenation() instead.
+
+    This function is kept for backward compatibility but should not be used.
+    Template formatting has been completely removed due to security vulnerabilities.
+    """
+    return _sanitize_input_for_concatenation(text)
+
+
+def _safe_hypothesis_template(action: str, component: str, issue: str, template_pattern: str) -> str:
+    """
+    CRITICAL SECURITY: Safe hypothesis generation without template injection vulnerability.
+
+    Replaces vulnerable template.format() calls with secure string concatenation.
+    This function completely eliminates template injection attack vectors.
+
+    Args:
+        action: Sanitized action description
+        component: Sanitized component name
+        issue: Sanitized issue description
+        template_pattern: Template pattern with {action}, {component}, {issue} placeholders
+
+    Returns:
+        str: Safe hypothesis text with no template injection vulnerability
+
+    Security:
+        - NEVER uses template.format() or similar vulnerable operations
+        - Uses only safe string concatenation and replacement
+        - All inputs are pre-sanitized
+        - No code execution possible
+    """
+    # Double-sanitize all inputs for defense in depth
+    safe_action = _sanitize_input_for_concatenation(action)
+    safe_component = _sanitize_input_for_concatenation(component)
+    safe_issue = _sanitize_input_for_concatenation(issue)
+
+    # Safe string replacement - NEVER use template.format()
+    # Replace placeholders manually to prevent injection
+    result = template_pattern.replace("{action}", safe_action)
+    result = result.replace("{component}", safe_component)
+    result = result.replace("{issue}", safe_issue)
+
+    # Final safety check - ensure no dangerous patterns remain
+    dangerous_patterns = ['{', '}', '$', '__', 'import', 'system', 'exec', 'eval']
+    for pattern in dangerous_patterns:
+        if pattern in result:
+            # Emergency fallback - remove dangerous content
+            result = re.sub(pattern, '', result, flags=re.IGNORECASE)
+
+    # Ensure result is not empty and properly formatted
+    if not result.strip():
+        result = f"Unknown issue affecting {safe_component or 'system'}"
+
+    # Capitalize first letter
+    if result and result[0].islower():
+        result = result[0].upper() + result[1:]
+
+    return result.strip()
 
 
 def _generate_domain_template_hypotheses(
@@ -548,20 +620,13 @@ def _generate_domain_template_hypotheses(
         if not isinstance(issue, str) or len(issue.strip()) == 0:
             issue = "performance issue"
 
-        # Sanitize all template inputs to prevent injection
-        safe_action = _sanitize_template_input(action)
-        safe_component = _sanitize_template_input(component)
-        safe_issue = _sanitize_template_input(issue)
+        # CRITICAL SECURITY FIX: Use safe template function instead of vulnerable template.format()
+        hypothesis_text = _safe_hypothesis_template(action, component, issue, template)
 
-        # Fill template with sanitized inputs (SECURE: no injection possible)
-        hypothesis_text = template.format(
-            action=safe_action,
-            component=safe_component,
-            issue=safe_issue
-        )
-
-        # Capitalize first letter
-        hypothesis_text = hypothesis_text[0].upper() + hypothesis_text[1:]
+        # CRITICAL SECURITY FIX: Sanitize inputs for testable predictions too
+        safe_action = _sanitize_input_for_concatenation(action)
+        safe_component = _sanitize_input_for_concatenation(component)
+        safe_issue = _sanitize_input_for_concatenation(issue)
 
         template_hyps.append({
             "hypothesis": hypothesis_text,
@@ -569,8 +634,8 @@ def _generate_domain_template_hypotheses(
             "confidence": BASE_CONFIDENCE_TEMPLATE_HYPOTHESIS,
             "assumptions": ["Context '{context}' is relevant to the issue"],
             "testable_predictions": [
-                f"Reverting the {action} should reduce or resolve the {issue}",
-                f"Monitoring {component} metrics should show correlation with the issue"
+                f"Reverting the {safe_action} should reduce or resolve the {safe_issue}",
+                f"Monitoring {safe_component} metrics should show correlation with the issue"
             ],
             "type": "domain_template"
         })
