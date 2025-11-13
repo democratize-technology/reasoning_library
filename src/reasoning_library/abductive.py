@@ -15,6 +15,11 @@ from .core import ReasoningChain, curry, tool_spec
 from .exceptions import ValidationError
 
 from .validation import validate_string_list, validate_hypotheses_list
+from .sanitization import (
+    sanitize_for_concatenation,
+    _sanitize_input_for_concatenation,
+    _sanitize_template_input
+)
 
 # Pre-compile regex patterns for ReDoS protection and performance
 # HIGH-001 SECURITY FIX: Simple pattern prevents catastrophic backtracking
@@ -478,47 +483,18 @@ def _generate_causal_chain_hypothesis(
 
 def _sanitize_input_for_concatenation(text: str) -> str:
     """
-    CRITICAL SECURITY: Comprehensive input sanitization to prevent ALL injection attacks.
+    DEPRECATED: Use sanitize_for_concatenation() from .sanitization instead.
 
-    This function provides defense-in-depth sanitization by removing ALL potentially
-    dangerous characters and patterns that could be used in injection attacks.
+    This function is maintained for backward compatibility only.
+    New code should use sanitize_for_concatenation() directly.
 
     Args:
         text: Input text to sanitize
 
     Returns:
         str: Sanitized text safe for string concatenation
-
-    Security Hardening:
-        - Blocks ALL template-related characters: {} [] () $
-        - Removes format string patterns: %s %d {var}
-        - Blocks attribute access: .method __dunder__
-        - Blocks shell metacharacters: |&;$<>`
-        - Blocks programming keywords: import exec eval system
-        - Strict length limits to prevent buffer attacks
     """
-    if not isinstance(text, str):
-        return ""
-
-    # Block dangerous keywords FIRST (to catch complete matches before character removal)
-    dangerous_keywords = ['import', 'exec', 'eval', 'system', 'subprocess', 'os', 'config', 'globals']
-    for keyword in dangerous_keywords:
-        text = re.sub(keyword, '', text, flags=re.IGNORECASE)
-
-    # Block ALL template and programming characters
-    text = re.sub(r'[{}\[\]()]', '', text)  # Block braces, brackets, parentheses
-    text = re.sub(r'\${[^}]*}', '', text)    # Block ${...} patterns
-    text = re.sub(r'%[a-zA-Z]', '', text)    # Block ALL format strings (%s, %d, %class, etc.)
-    text = re.sub(r'%', '', text)            # Block any remaining % characters
-    text = re.sub(r'__.*?__', '', text)      # Block dunder methods (non-greedy)
-    text = re.sub(r'\.[a-zA-Z_]', '', text)  # Block attribute access
-    text = re.sub(r'\.', '', text)           # Block all remaining dots
-    text = re.sub(r'[|&;$<>`]', '', text)    # Block shell metacharacters
-    text = re.sub(r'["\']', '', text)        # Block quotes
-
-    # Additional hardening
-    text = text[:50]  # Strict length limit
-    return text.strip()
+    return sanitize_for_concatenation(text, max_length=50)
 
 
 def _sanitize_template_input(text: str) -> str:

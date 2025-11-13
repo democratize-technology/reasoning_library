@@ -12,6 +12,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from .exceptions import ValidationError
 from .null_handling import handle_optional_params
+from .sanitization import sanitize_for_display
 from .constants import (
     # Security constants
     MAX_SOURCE_CODE_SIZE,
@@ -507,39 +508,10 @@ def _safe_copy_spec(tool_spec: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(tool_spec["function"], dict):
         raise ValidationError("Tool specification 'function' value must be a dictionary")
 
+    # Use shared sanitization utility
     def sanitize_text_input(text: Any, max_length: int = KEYWORD_LENGTH_LIMIT * 20) -> str:
-        """SECURE: Sanitize text inputs to prevent injection attacks."""
-        if not isinstance(text, str):
-            return ""
-
-        # Truncate to reasonable length
-        text = text[:max_length]
-
-        # Remove dangerous characters that could be used for injection
-        sanitized = re.sub(r'[<>"\'`]', '', text)
-            # Remove HTML / JS injection characters
-        sanitized = re.sub(r'[{}]',
-                           '', sanitized)  # Remove template injection characters
-        sanitized = re.sub(r'\${[^}]*}', '', sanitized)  # Remove ${...} patterns
-        sanitized = re.sub(r'%[sd]', '', sanitized)      # Remove %s, %d patterns
-        sanitized = re.sub(r'__import__\s*\(',
-                           'BLOCKED', sanitized)  # Block import attempts
-        sanitized = re.sub(r'eval\s*\(',
-                           'BLOCKED', sanitized)      # Block eval attempts
-        sanitized = re.sub(r'exec\s*\(',
-                           'BLOCKED', sanitized)      # Block exec attempts
-
-        # Remove newlines and other control characters that could poison logs
-        # CRITICAL FIX: Prevent log injection by normalizing newlines and control chars
-        sanitized = re.sub(r'[\r\n\t]',
-                           ' ', sanitized)  # Convert newlines / tabs to spaces
-        sanitized = re.sub(r'\s+', ' ', sanitized)       # Normalize multiple spaces
-
-        # Remove potential ANSI escape sequences that could poison terminal logs
-        sanitized = re.sub(r'\x1b\[[0 - 9;]*m', '', sanitized)
-            # Remove ANSI color codes
-
-        return sanitized.strip()
+        """DEPRECATED: Use sanitize_for_display from .sanitization instead."""
+        return sanitize_for_display(text, max_length)
 
     # Whitelist of allowed top - level keys to prevent prototype pollution
     allowed_top_level_keys = {"type", "function"}
