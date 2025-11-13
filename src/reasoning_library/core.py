@@ -114,12 +114,10 @@ def _get_math_detection_cached(func: Callable[...,
         func_module = getattr(func, '__module__', 'unknown')
         func_qualname = getattr(func, '__qualname__', 'unknown')
 
-        # Get source code for content - based hashing
-        try:
-            import inspect
-            source_code = inspect.getsource(func) or ''
-        except (OSError, TypeError):
-            source_code = ''
+        # SECURE: Source code inspection is DISABLED to prevent information disclosure
+        # CRITICAL SECURITY FIX for CRIT-003: Prevent exposure of API keys, passwords,
+        # proprietary algorithms, and sensitive data through source code inspection
+        source_code = ''
 
         docstring = func.__doc__ or ''
 
