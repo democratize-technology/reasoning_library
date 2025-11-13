@@ -27,6 +27,22 @@ KEYWORD_EXTRACTION_PATTERN = re.compile(r'[a-zA-Z0-9]{1,50}')
 # Simple character class with explicit length limits prevents ReDoS attacks
 # Bounds checking (1,50) prevents excessive backtracking on malformed input
 
+# Thread-safe shared constants for keyword extraction
+# These are immutable sets that can be safely shared across threads
+COMMON_WORDS = frozenset({
+    'the', 'is', 'at', 'which', 'on', 'a', 'an', 'and', 'or', 'but', 'in', 'with',
+    'to', 'for', 'o', 'as', 'by', 'that', 'this', 'it', 'from', 'are', 'be', 'was',
+    'were', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
+    'could', 'should', 'may', 'might', 'can', 'must', 'shall', 'very', 'really'
+})
+
+LESS_INFORMATIVE_WORDS = frozenset({
+    'about', 'like', 'just', 'then', 'than', 'some', 'more', 'most'
+})
+
+# Thread safety note: These constants are immutable frozensets that are safe
+# for concurrent access across multiple threads without locking mechanisms.
+
 from .constants import (
     # Input validation limits
     MAX_OBSERVATION_LENGTH,
@@ -214,21 +230,16 @@ def _extract_keywords(text: str) -> List[str]:
     if len(text) > 5000:  # Conservative limit
         text = text[:5000]  # Truncate to safe length
 
-    common_words = {
-        'the', 'is', 'at', 'which', 'on', 'a', 'an', 'and', 'or', 'but', 'in', 'with',
-        'to', 'for', 'o', 'as', 'by', 'that', 'this', 'it', 'from', 'are', 'be', 'was',
-        'were', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
-        'could', 'should', 'may', 'might', 'can', 'must', 'shall', 'very', 'really'
-    }
+    # THREAD SAFETY: Use immutable frozensets that are safe for concurrent access
+    # This eliminates the overhead of creating sets on every function call
 
     # HIGH-001 SECURITY FIX: Use pre-compiled pattern with length limits to prevent ReDoS
     # Pattern [a-zA-Z0-9]{1,50} prevents backtracking and limits word length to 50 chars
     words = KEYWORD_EXTRACTION_PATTERN.findall(text.lower())
 
-    keywords = [word for word in words if word not in common_words and len(word) > MIN_KEYWORD_LENGTH]
-
-    less_informative = {'about', 'like', 'just', 'then', 'than', 'some', 'more', 'most'}
-    keywords = [word for word in keywords if word not in less_informative]
+    # Use thread-safe shared constants for filtering
+    keywords = [word for word in words if word not in COMMON_WORDS and len(word) > MIN_KEYWORD_LENGTH]
+    keywords = [word for word in keywords if word not in LESS_INFORMATIVE_WORDS]
 
     unique_keywords = []
     seen = set()
