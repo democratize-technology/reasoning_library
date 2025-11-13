@@ -130,36 +130,42 @@ def _get_math_detection_cached(func: Callable[...,
         # Specific exceptions: import errors, type errors, value errors, attribute access errors
         func_id = str(id(func))
 
-    # Thread - safe cache access with proper locking
-    with _cache_lock:
-        # Check cache first (ensure cached value is not None)
-        if (func_id in _math_detection_cache and
-                _math_detection_cache[func_id] is not None):
-            return _math_detection_cache[func_id]
-
-    # Perform expensive detection outside of lock to minimize contention
+    # Perform expensive detection first to minimize lock contention
+    # This is safe because we check cache under lock afterward
     result = _detect_mathematical_reasoning_uncached(func)
 
-    # Thread - safe cache update and eviction with proper locking
+    # Single lock acquisition for all cache operations to eliminate race conditions
     with _cache_lock:
-        # Double - check pattern: another thread might have added this while we were detecting
+        # Check if another thread already cached this result while we were detecting
         if (func_id in _math_detection_cache and
                 _math_detection_cache[func_id] is not None):
             return _math_detection_cache[func_id]
 
-        # Implement atomic cache size management and eviction
+        # ATOMIC cache eviction: check if eviction is needed before adding new entry
         if len(_math_detection_cache) >= MAX_CACHE_SIZE:
-            # Remove oldest entries (simple FIFO approach)
-            # In production, consider using functools.lru_cache or more sophisticated eviction
-            oldest_keys = list(_math_detection_cache.keys())[:int(MAX_CACHE_SIZE * CACHE_EVICTION_FRACTION)]
-            for key in oldest_keys:
-                _math_detection_cache.pop(key, None)
+            # Calculate how many entries to evict atomically
+            num_to_evict = int(MAX_CACHE_SIZE * CACHE_EVICTION_FRACTION)
+            if num_to_evict > 0:
+                # Get keys to evict (deterministic order)
+                keys_to_evict = set(list(_math_detection_cache.keys())[:num_to_evict])
 
-        # Ensure result is always a valid tuple (defensive programming)
+                # ATOMIC eviction: remove all keys at once using dictionary.clear() and update
+                # This eliminates the race condition window between individual pop operations
+                # Store current cache entries
+                surviving_entries = {
+                    key: value for key, value in _math_detection_cache.items()
+                    if key not in keys_to_evict
+                }
+
+                # Clear and rebuild cache atomically
+                _math_detection_cache.clear()
+                _math_detection_cache.update(surviving_entries)
+
+        # Validate and normalize result before caching
         if result is None or not isinstance(result, tuple) or len(result) != 3:
             result = (False, None, None)
 
-        # Cache the result
+        # ATOMIC cache update: single operation to add the new entry
         _math_detection_cache[func_id] = result
         return result
 
