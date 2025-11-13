@@ -505,9 +505,10 @@ def _check_geometric_progression(
             (predicted_value, confidence, description) or (None, None, None)
     """
     if all(s != 0 for s in sequence):
-        ratios_list = [sequence[i] / sequence[i - 1] for i in range(1, len(sequence))]
-        # Add bounds checking to prevent extreme values
-        ratios = list(np.clip(ratios_list, -1e6, 1e6))
+        # Vectorized calculation using NumPy for performance optimization
+        sequence_array = np.array(sequence)
+        ratios = sequence_array[1:] / sequence_array[:-1]
+        ratios = np.clip(ratios, -1e6, 1e6)  # Single clipping operation
         if len(ratios) > 0 and np.allclose(ratios, ratios[0], rtol=rtol, atol=atol):
             result = float(sequence[-1] * ratios[0])
             confidence = _calculate_geometric_confidence(ratios, len(sequence))
@@ -605,8 +606,10 @@ def predict_next_in_sequence(
     # Check for geometric progression
     result, confidence, description = _check_geometric_progression(sequence, rtol, atol)
     if result is not None:
-        ratios_list = [sequence[i] / sequence[i - 1] for i in range(1, len(sequence))]
-        ratios = list(np.clip(ratios_list, -1e6, 1e6))
+        # Vectorized calculation using NumPy for performance optimization
+        sequence_array = np.array(sequence)
+        ratios = sequence_array[1:] / sequence_array[:-1]
+        ratios = np.clip(ratios, -1e6, 1e6)  # Single clipping operation
         evidence = (
             f"Common ratio {ratios[0]} found in {ratios}. "
             "Confidence based on pattern quality and data sufficiency."
@@ -690,9 +693,10 @@ def find_pattern_description(
 
     # Check for geometric progression
     if all(s != 0 for s in sequence):
-        ratios_list2 = [sequence[i] / sequence[i - 1] for i in range(1, len(sequence))]
-        # Add bounds checking to prevent extreme values
-        ratios = list(np.clip(ratios_list2, -1e6, 1e6))
+        # Vectorized calculation using NumPy for performance optimization
+        sequence_array = np.array(sequence)
+        ratios = sequence_array[1:] / sequence_array[:-1]
+        ratios = np.clip(ratios, -1e6, 1e6)  # Single clipping operation
         if len(ratios) > 0 and np.allclose(ratios, ratios[0], rtol = rtol, atol = atol):
             result_str = f"Geometric progression with common ratio: {ratios[0]}"
             # Use higher base confidence for pattern description than prediction
