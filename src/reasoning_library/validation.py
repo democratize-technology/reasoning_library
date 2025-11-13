@@ -223,24 +223,96 @@ def validate_confidence_value(confidence: Union[int, float, str, None]) -> float
     Validate and clamp a confidence value to [0.0, 1.0] range.
 
     Args:
-        confidence: The confidence value to validate
+        confidence: The confidence value to validate (int, float, or str)
 
     Returns:
         float: Clamped confidence value
 
     Raises:
-        ValidationError: If confidence is not numeric
+        ValidationError: If confidence is not numeric or contains dangerous values
     """
+    # Handle None
+    if confidence is None:
+        raise ValidationError("Confidence value cannot be None")
+
+    # Handle string inputs with secure validation
+    if isinstance(confidence, str):
+        return _validate_string_confidence(confidence)
+
+    # Handle numeric inputs
     if not isinstance(confidence, (int, float)):
-        raise ValidationError(f"Confidence value '{confidence}' must be numeric (int or float), got {type(confidence).__name__}")
+        raise ValidationError(f"Confidence value '{confidence}' must be numeric (int, float, or str), got {type(confidence).__name__}")
 
     if isinstance(confidence, float):
         if confidence != confidence:  # NaN check
-            raise ValidationError(f"Confidence cannot be NaN")
+            raise ValidationError("Confidence cannot be NaN")
         if confidence in (float('inf'), float('-inf')):
-            raise ValidationError(f"Confidence cannot be infinite")
+            raise ValidationError("Confidence cannot be infinite")
 
     return max(0.0, min(1.0, float(confidence)))
+
+
+def _validate_string_confidence(confidence_str: str) -> float:
+    """
+    Securely validate a string confidence value and convert to float.
+
+    Args:
+        confidence_str: The string confidence value to validate
+
+    Returns:
+        float: Validated and clamped confidence value
+
+    Raises:
+        ValidationError: If string contains invalid or dangerous content
+    """
+    import re
+
+    # Remove whitespace but check for empty/whitespace-only strings
+    trimmed = confidence_str.strip()
+    if not trimmed:
+        raise ValidationError("Confidence value cannot be empty or whitespace-only")
+
+    # Check for dangerous patterns that could cause type coercion issues
+    dangerous_patterns = [
+        r'^[nN][aA][nN]$',                    # nan, NaN, NAN
+        r'^[iI][nN][fF]$',                    # inf, Inf, INF
+        r'^-[iI][nN][fF]$',                   # -inf, -Inf
+        r'^[+-]?\d*[eE][+-]?\d+$',            # scientific notation like 1e10, 1e-10
+        r'^0[xX][0-9a-fA-F]+$',               # hexadecimal notation
+        r'^0[bB][01]+$',                      # binary notation
+        r'^0[oO][0-7]+$',                     # octal notation
+    ]
+
+    # Check for dangerous content in the string
+    for pattern in dangerous_patterns:
+        if re.match(pattern, trimmed):
+            raise ValidationError(f"Confidence value '{confidence_str}' contains invalid format or dangerous content")
+
+    # Check for invalid characters (anything except digits, decimal point, and leading sign)
+    if re.search(r'[^\d.\-+]', trimmed):
+        raise ValidationError(f"Confidence value '{confidence_str}' contains invalid characters")
+
+    # Strict decimal format validation: optional sign, digits, optional decimal point and more digits
+    decimal_pattern = r'^[+-]?(\d+(\.\d*)?|\.\d+)$'
+    if not re.match(decimal_pattern, trimmed):
+        raise ValidationError(f"Confidence value '{confidence_str}' must be a valid decimal number")
+
+    try:
+        # Convert to float safely
+        confidence_float = float(trimmed)
+
+        # Check for NaN and infinity that might slip through
+        if confidence_float != confidence_float:  # NaN check
+            raise ValidationError(f"Confidence value '{confidence_str}' resulted in NaN")
+
+        if confidence_float in (float('inf'), float('-inf')):
+            raise ValidationError(f"Confidence value '{confidence_str}' resulted in infinite value")
+
+        # Clamp to valid range [0.0, 1.0]
+        return max(0.0, min(1.0, confidence_float))
+
+    except (ValueError, OverflowError) as e:
+        raise ValidationError(f"Confidence value '{confidence_str}' cannot be converted to a valid number: {e}")
 
 
 def validate_hypotheses_list(
