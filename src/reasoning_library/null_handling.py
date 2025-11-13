@@ -5,7 +5,7 @@ This module provides standardized patterns for representing "no value" scenarios
 and ensures consistent handling of None, empty strings, and empty collections.
 """
 
-from typing import Any, List, Dict, Optional, Union, Callable
+from typing import Any, List, Dict, Optional, Callable
 from functools import wraps
 
 # Constants for representing "no value" consistently

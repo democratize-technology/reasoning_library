@@ -8,7 +8,7 @@ and the Modus Ponens rule, implemented using a functional programming style.
 from typing import Any, Callable, Optional, Tuple
 
 from .core import ReasoningChain, curry, tool_spec
-from .null_handling import init_optional_bool, normalize_none_return, with_null_safety
+from .null_handling import init_optional_bool, with_null_safety
 from .exceptions import ValidationError
 
 # --- Base Logical Primitives (Pure Functions) ---

@@ -6,7 +6,7 @@ used in public APIs, ensuring robust input validation and preventing
 type-related security vulnerabilities.
 """
 
-from typing import Any, Dict, List, Optional, Union, get_type_hints
+from typing import Any, Dict, List, Optional, Union
 import re
 from .exceptions import ValidationError
 
