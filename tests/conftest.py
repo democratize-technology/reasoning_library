@@ -207,6 +207,3 @@ Coverage Report:    pytest --cov=src/reasoning_library
 """
 
 
-def pytest_html_report_title(report):
-    """Custom title for HTML reports."""
-    report.title = "Reasoning Library Test Results"
