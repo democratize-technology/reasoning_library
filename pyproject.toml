@@ -72,6 +72,19 @@ addopts = [
     "--verbose",
     "--tb=short",
 ]
+markers = [
+    "security: Marks tests as security-focused (vulnerability testing, input validation, DoS protection)",
+    "performance: Marks tests as performance-focused (execution time, memory usage, scalability)",
+    "integration: Marks tests as integration tests (cross-module interaction, external dependencies)",
+    "unit: Marks tests as unit tests (isolated functionality testing)",
+    "slow: Marks tests as slow-running (deselect with '-m \"not slow\"')",
+    "redos: Marks tests specifically for ReDoS vulnerability testing",
+    "dos: Marks tests specifically for Denial of Service resistance testing",
+    "injection: Marks tests specifically for injection attack prevention",
+    "timing: Marks tests specifically for timing attack prevention",
+    "memory: Marks tests specifically for memory safety and leak detection",
+    "concurrency: Marks tests specifically for thread safety and concurrent access",
+]
 
 [tool.coverage.run]
 source = ["src/reasoning_library"]
