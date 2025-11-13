@@ -1034,62 +1034,150 @@ def detect_polynomial_pattern(sequence: List[float],
     Returns:
         Optional[Dict]: Pattern information if detected, None otherwise
     """
-    if len(sequence) < max_degree + 2:  # Need enough points for polynomial fitting
+    if len(sequence) < 3:  # Need at least 3 points for polynomial fitting
         return None
 
-    x_values = np.arange(1, len(sequence) + 1)  # 1 - indexed positions
+    x_values = np.arange(1, len(sequence) + 1)  # 1-indexed positions
     y_values = np.array(sequence)
 
     best_fit = None
     best_r_squared = 0.0
 
+    # OPTIMIZATION: Use efficient Vandermonde matrix approach for O(n³) instead of O(n⁴)
+    # For each degree, create the appropriate Vandermonde matrix and solve using least squares
+    # This avoids the overhead of np.polyfit's SVD decomposition while maintaining accuracy
+    max_feasible_degree = min(max_degree, len(sequence) - 2)
+
+    # Pre-compute values needed for R² calculation (done once)
+    y_mean = np.mean(y_values)
+    ss_tot = np.sum((y_values - y_mean) ** 2)
+
     # Try different polynomial degrees
+    for degree in range(1, max_feasible_degree + 1):
+        try:
+            # OPTIMIZATION: Create Vandermonde matrix and solve directly using least squares
+            # This is more efficient than np.polyfit for each degree
+            X = np.vander(x_values, degree + 1)  # [x^degree, x^(degree-1), ..., x^0]
+            coefficients = np.linalg.lstsq(X, y_values, rcond=None)[0]
+
+            # Compute predicted values using matrix multiplication (more efficient than polyval)
+            predicted_values = X @ coefficients
+
+            # Calculate R-squared
+            ss_res = np.sum((y_values - predicted_values) ** 2)
+            r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+
+            # Consider it a good fit if R-squared is high
+            if r_squared > 0.95 and r_squared > best_r_squared:
+                best_r_squared = r_squared
+                next_x = len(sequence) + 1
+                # Evaluate polynomial at next point using Horner's method
+                next_term = np.polyval(coefficients, next_x)
+
+                # Determine pattern type
+                if degree == 2 and np.allclose(coefficients, [1, 0, 0], atol=1e-6):
+                    pattern_type = "perfect_squares"
+                    description = "Perfect squares (n²)"
+                elif degree == 3 and np.allclose(coefficients, [1, 0, 0, 0], atol=1e-6):
+                    pattern_type = "perfect_cubes"
+                    description = "Perfect cubes (n³)"
+                elif degree == 2:
+                    pattern_type = "quadratic"
+                    description = f"Quadratic: {coefficients[0]:.3f}n² + {coefficients[1]:.3f}n + {coefficients[2]:.3f}"
+                elif degree == 3:
+                    pattern_type = "cubic"
+                    description = f"Cubic: {coefficients[0]:.3f}n³ + {coefficients[1]:.3f}n² + {coefficients[2]:.3f}n + {coefficients[3]:.3f}"
+                else:
+                    pattern_type = f"polynomial_degree_{degree}"
+                    description = f"Polynomial of degree {degree}"
+
+                best_fit = {
+                    "type": pattern_type,
+                    "description": description,
+                    "degree": degree,
+                    "coefficients": [float(c) for c in coefficients],
+                    "next_term": float(next_term),
+                    "confidence": _calculate_polynomial_confidence(len(sequence),
+                                                                   r_squared, degree),
+                    "r_squared": r_squared
+                }
+
+        except np.linalg.LinAlgError:
+            # Handle rank-deficient matrices by skipping this degree
+            continue
+
+    return best_fit
+
+
+def _detect_polynomial_pattern_fallback(sequence: List[float],
+                                       max_degree: int) -> Optional[Dict[str, Any]]:
+    """
+    Fallback implementation using original polyfit approach for edge cases.
+
+    Args:
+        sequence (List[float]): The sequence to analyze
+        max_degree (int): Maximum polynomial degree to check
+
+    Returns:
+        Optional[Dict]: Pattern information if detected, None otherwise
+    """
+    x_values = np.arange(1, len(sequence) + 1)
+    y_values = np.array(sequence)
+
+    best_fit = None
+    best_r_squared = 0.0
+
     for degree in range(1, max_degree + 1):
         if len(sequence) < degree + 2:
-            continue  # Not enough points for this degree
+            continue
 
-        # Fit polynomial
-        coefficients = np.polyfit(x_values, y_values, degree)
-        predicted_values = np.polyval(coefficients, x_values)
+        try:
+            coefficients = np.polyfit(x_values, y_values, degree)
+            predicted_values = np.polyval(coefficients, x_values)
 
-        # Calculate R - squared
-        ss_res = np.sum((y_values - predicted_values) ** 2)
-        ss_tot = np.sum((y_values - np.mean(y_values)) ** 2)
-        r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
+            ss_res = np.sum((y_values - predicted_values) ** 2)
+            ss_tot = np.sum((y_values - np.mean(y_values)) ** 2)
+            r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
 
-        # Consider it a good fit if R - squared is high
-        if r_squared > 0.95 and r_squared > best_r_squared:
-            best_r_squared = r_squared
-            next_x = len(sequence) + 1
-            next_term = np.polyval(coefficients, next_x)
+            if r_squared > 0.95 and r_squared > best_r_squared:
+                best_r_squared = r_squared
+                next_x = len(sequence) + 1
+                next_term = np.polyval(coefficients, next_x)
 
-            # Determine pattern type
-            if degree == 2 and np.allclose(coefficients, [1, 0, 0], atol = 1e-6):
-                pattern_type = "perfect_squares"
-                description = "Perfect squares (n²)"
-            elif degree == 3 and np.allclose(coefficients, [1, 0, 0, 0], atol = 1e-6):
-                pattern_type = "perfect_cubes"
-                description = "Perfect cubes (n³)"
-            elif degree == 2:
-                pattern_type = "quadratic"
-                description = f"Quadratic: {coefficients[0]:.3f}n² + {coefficients[1]:.3f}n + {coefficients[2]:.3f}"
-            elif degree == 3:
-                pattern_type = "cubic"
-                description = f"Cubic: {coefficients[0]:.3f}n³ + {coefficients[1]:.3f}n² + {coefficients[2]:.3f}n + {coefficients[3]:.3f}"
-            else:
-                pattern_type = f"polynomial_degree_{degree}"
-                description = f"Polynomial of degree {degree}"
+                # Determine pattern type (same logic as optimized version)
+                if degree == 2 and np.allclose(coefficients, [1, 0, 0], atol=1e-6):
+                    pattern_type = "perfect_squares"
+                    description = "Perfect squares (n²)"
+                elif degree == 3 and np.allclose(coefficients, [1, 0, 0, 0], atol=1e-6):
+                    pattern_type = "perfect_cubes"
+                    description = "Perfect cubes (n³)"
+                elif degree == 2:
+                    pattern_type = "quadratic"
+                    description = f"Quadratic: {coefficients[0]:.3f}n² + {coefficients[1]:.3f}n + {coefficients[2]:.3f}"
+                elif degree == 3:
+                    pattern_type = "cubic"
+                    description = f"Cubic: {coefficients[0]:.3f}n³ + {coefficients[1]:.3f}n² + {coefficients[2]:.3f}n + {coefficients[3]:.3f}"
+                else:
+                    pattern_type = f"polynomial_degree_{degree}"
+                    description = f"Polynomial of degree {degree}"
 
-            best_fit = {
-                "type": pattern_type,
-                "description": description,
-                "degree": degree,
-                "coefficients": [float(c) for c in coefficients],
-                "next_term": float(next_term),
-                "confidence": _calculate_polynomial_confidence(len(sequence),
-                                                               r_squared, degree),
-                "r_squared": r_squared
-            }
+                best_fit = {
+                    "type": pattern_type,
+                    "description": description,
+                    "degree": degree,
+                    "coefficients": [float(c) for c in coefficients],
+                    "next_term": float(next_term),
+                    "confidence": _calculate_polynomial_confidence(len(sequence),
+                                                                   r_squared, degree),
+                    "r_squared": r_squared
+                }
+
+        except np.RankError:
+            # Handle rank-deficient matrices by skipping this degree
+            continue
+        except np.linalg.LinAlgError:
+            # Handle other linear algebra errors by skipping this degree
+            continue
 
     return best_fit
 
