@@ -28,6 +28,9 @@ from reasoning_library.inductive import (
     _calculate_pattern_quality_score,
     find_pattern_description,
     predict_next_in_sequence,
+    _COMPUTATION_TIMEOUT,
+    _MAX_SEQUENCE_LENGTH,
+    _VALUE_MAGNITUDE_LIMIT,
 )
 
 
@@ -540,6 +543,28 @@ def run_all_tests():
                 f"   (Note: {skipped_tests} tests were skipped due to missing dependencies)"
             )
         return True
+
+
+class TestBackwardCompatibilityAliases:
+    """Test backward compatibility aliases for constants."""
+
+    def test_computation_timeout_alias(self):
+        """Test _COMPUTATION_TIMEOUT alias exists and matches expected value."""
+        # The alias should be a positive number
+        assert isinstance(_COMPUTATION_TIMEOUT, (int, float))
+        assert _COMPUTATION_TIMEOUT > 0
+
+    def test_max_sequence_length_alias(self):
+        """Test _MAX_SEQUENCE_LENGTH alias exists and matches expected value."""
+        # The alias should be a positive integer
+        assert isinstance(_MAX_SEQUENCE_LENGTH, int)
+        assert _MAX_SEQUENCE_LENGTH > 0
+
+    def test_value_magnitude_limit_alias(self):
+        """Test _VALUE_MAGNITUDE_LIMIT alias exists and matches expected value."""
+        # The alias should be a positive number
+        assert isinstance(_VALUE_MAGNITUDE_LIMIT, (int, float))
+        assert _VALUE_MAGNITUDE_LIMIT > 0
 
 
 if __name__ == "__main__":

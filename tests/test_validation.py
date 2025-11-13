@@ -14,8 +14,8 @@ from reasoning_library.validation import (
     validate_confidence_value,
     validate_hypotheses_list,
     validate_metadata_dict,
-    ValidationError,
 )
+from reasoning_library.exceptions import ValidationError
 
 
 class TestValidateStringList:

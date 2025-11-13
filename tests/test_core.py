@@ -14,6 +14,8 @@ import pytest
 from reasoning_library.exceptions import ValidationError
 from reasoning_library.core import (
     COMMENT_PATTERN,
+    COMBINATION_PATTERN,
+    CLEAN_FACTOR_PATTERN,
     ENHANCED_TOOL_REGISTRY,
     EVIDENCE_PATTERN,
     FACTOR_PATTERN,
@@ -21,6 +23,8 @@ from reasoning_library.core import (
     TOOL_REGISTRY,
     ReasoningChain,
     ReasoningStep,
+    _MAX_CACHE_SIZE,
+    _MAX_REGISTRY_SIZE,
     _detect_mathematical_reasoning,
     _safe_copy_spec,
     curry,
@@ -646,6 +650,33 @@ def run_all_tests():
     else:
         print("\n🎉 All tests passed!")
         return True
+
+
+class TestCoreModuleImports:
+    """Test core module imports and backward compatibility aliases."""
+
+    def test_regex_patterns_imported(self):
+        """Test that all regex patterns are properly imported."""
+        # Test that patterns are compiled regex objects
+        assert hasattr(FACTOR_PATTERN, 'pattern')
+        assert hasattr(COMMENT_PATTERN, 'pattern')
+        assert hasattr(EVIDENCE_PATTERN, 'pattern')
+        assert hasattr(COMBINATION_PATTERN, 'pattern')
+        assert hasattr(CLEAN_FACTOR_PATTERN, 'pattern')
+
+    def test_backward_compatibility_aliases(self):
+        """Test backward compatibility aliases for cache and registry sizes."""
+        # Test that aliases exist and are positive integers
+        assert isinstance(_MAX_CACHE_SIZE, int)
+        assert _MAX_CACHE_SIZE > 0
+
+        assert isinstance(_MAX_REGISTRY_SIZE, int)
+        assert _MAX_REGISTRY_SIZE > 0
+
+    def test_max_source_code_size_imported(self):
+        """Test that MAX_SOURCE_CODE_SIZE is properly imported."""
+        assert isinstance(MAX_SOURCE_CODE_SIZE, int)
+        assert MAX_SOURCE_CODE_SIZE > 0
 
 
 if __name__ == "__main__":

@@ -5,7 +5,21 @@ Tests for abductive reasoning module.
 from reasoning_library.abductive import (
     DOMAIN_TEMPLATES,
     _extract_keywords_with_context,
+    _validate_and_sanitize_input_size,
+    _validate_confidence_value,
+    _calculate_hypothesis_confidence,
+    _extract_keywords,
+    _find_common_themes,
+    _generate_single_cause_hypothesis,
+    _generate_multiple_causes_hypothesis,
+    _generate_causal_chain_hypothesis,
+    _sanitize_template_input,
+    _generate_domain_template_hypotheses,
+    _generate_contextual_hypothesis,
+    _generate_systemic_hypothesis,
     generate_hypotheses,
+    rank_hypotheses,
+    evaluate_best_explanation,
 )
 
 
@@ -372,3 +386,192 @@ class TestDoSProtection:
         processing_time = end_time - start_time
         assert processing_time < 1.0, f"Processing took {processing_time}s, should be < 1s"
         assert len(result) > 0
+
+
+class TestAbductiveInternalFunctions:
+    """Test internal functions of abductive reasoning module."""
+
+    def test_validate_and_sanitize_input_size(self):
+        """Test input validation and sanitization."""
+        observations = ["test obs", "another obs"]
+        context = "test context"
+
+        sanitized_obs, sanitized_ctx = _validate_and_sanitize_input_size(observations, context)
+
+        # Should return the same values for valid inputs
+        assert sanitized_obs == observations
+        assert sanitized_ctx == context
+
+    def test_validate_confidence_value(self):
+        """Test confidence value validation."""
+        # Test valid values
+        assert _validate_confidence_value(0.5) == 0.5
+        assert _validate_confidence_value(0.0) == 0.0
+        assert _validate_confidence_value(1.0) == 1.0
+        assert _validate_confidence_value(0.75, hypothesis_index=1) == 0.75
+
+        # Test with hypothesis_index
+        assert _validate_confidence_value(0.8, hypothesis_index=2) == 0.8
+
+    def test_calculate_hypothesis_confidence(self):
+        """Test hypothesis confidence calculation."""
+        hypothesis = {
+            "hypothesis": "Test hypothesis",
+            "explains": [0, 1],
+            "assumptions": ["test assumption"],
+            "testable_predictions": ["test prediction"]
+        }
+        observations_count = 3
+        keywords_count = 2
+        domain_count = 1
+
+        confidence = _calculate_hypothesis_confidence(
+            hypothesis, observations_count, keywords_count, domain_count
+        )
+
+        assert 0.0 <= confidence <= 1.0
+
+    def test_extract_keywords(self):
+        """Test keyword extraction from text."""
+        text = "server CPU high and memory low"
+        keywords = _extract_keywords(text)
+
+        assert isinstance(keywords, list)
+        assert len(keywords) > 0
+        # Should contain relevant keywords
+        assert any("server" in kw or "cpu" in kw or "memory" in kw for kw in keywords)
+
+    def test_find_common_themes(self):
+        """Test finding common themes in observations."""
+        observations = [
+            "server CPU is high",
+            "database server memory usage",
+            "application server response time"
+        ]
+        themes = _find_common_themes(observations)
+
+        assert isinstance(themes, list)
+        # Should find common themes like "server"
+        assert any("server" in theme for theme in themes)
+
+    def test_generate_single_cause_hypothesis(self):
+        """Test single cause hypothesis generation."""
+        common_themes = ["server", "performance"]
+        observations_count = 2
+
+        hypothesis = _generate_single_cause_hypothesis(common_themes, observations_count)
+
+        assert hypothesis is not None
+        assert "hypothesis" in hypothesis
+        assert "confidence" in hypothesis
+        assert "explains" in hypothesis
+        assert isinstance(hypothesis["confidence"], float)
+
+    def test_generate_multiple_causes_hypothesis(self):
+        """Test multiple causes hypothesis generation."""
+        common_themes = ["server", "database", "network"]
+        observations_count = 3
+
+        hypothesis = _generate_multiple_causes_hypothesis(common_themes, observations_count)
+
+        assert hypothesis is not None
+        assert "hypothesis" in hypothesis
+        assert "confidence" in hypothesis
+        assert "explains" in hypothesis
+        assert isinstance(hypothesis["confidence"], float)
+
+    def test_generate_causal_chain_hypothesis(self):
+        """Test causal chain hypothesis generation."""
+        common_themes = ["deploy", "server", "slow"]
+        observations_count = 2
+
+        hypothesis = _generate_causal_chain_hypothesis(common_themes, observations_count)
+
+        assert hypothesis is not None
+        assert "hypothesis" in hypothesis
+        assert "confidence" in hypothesis
+        assert "explains" in hypothesis
+        assert isinstance(hypothesis["confidence"], float)
+
+    def test_sanitize_template_input(self):
+        """Test template input sanitization."""
+        # Test normal input
+        assert _sanitize_template_input("normal text") == "normal text"
+
+        # Test malicious input
+        malicious = "{evil} <script>alert('xss')</script>"
+        safe = _sanitize_template_input(malicious)
+        assert "{" not in safe
+        assert "}" not in safe
+        assert "<" not in safe
+        assert ">" not in safe
+
+    def test_generate_domain_template_hypotheses(self):
+        """Test domain template hypothesis generation."""
+        observations = ["server slow", "database error"]
+        context = "web application"
+        keywords = {"actions": ["deploy"], "components": ["server"], "issues": ["slow"]}
+
+        hypotheses = _generate_domain_template_hypotheses(observations, context, keywords)
+
+        assert isinstance(hypotheses, list)
+        if hypotheses:  # May be empty if no domain matches
+            for hyp in hypotheses:
+                assert "hypothesis" in hyp
+                assert "confidence" in hyp
+
+    def test_generate_contextual_hypothesis(self):
+        """Test contextual hypothesis generation."""
+        observations = ["system slow"]
+        context = "production environment"
+        observations_count = 1
+
+        hypothesis = _generate_contextual_hypothesis(observations, context, observations_count)
+
+        # May return None if no keywords found
+        if hypothesis is not None:
+            assert "hypothesis" in hypothesis
+            assert "confidence" in hypothesis
+
+    def test_generate_systemic_hypothesis(self):
+        """Test systemic hypothesis generation."""
+        observations = ["server slow", "database error", "network timeout"]
+        observations_count = 3
+
+        hypothesis = _generate_systemic_hypothesis(observations, observations_count)
+
+        assert hypothesis is not None
+        assert "hypothesis" in hypothesis
+        assert "confidence" in hypothesis
+        assert "systemic" in hypothesis["hypothesis"].lower()
+
+    def test_rank_hypotheses(self):
+        """Test hypothesis ranking."""
+        hypotheses = [
+            {"hypothesis": "high confidence", "confidence": 0.9},
+            {"hypothesis": "low confidence", "confidence": 0.3},
+            {"hypothesis": "medium confidence", "confidence": 0.6}
+        ]
+
+        ranked = rank_hypotheses(hypotheses)
+
+        assert len(ranked) == 3
+        # Should be sorted by confidence descending
+        assert ranked[0]["confidence"] >= ranked[1]["confidence"] >= ranked[2]["confidence"]
+
+    def test_evaluate_best_explanation(self):
+        """Test best explanation evaluation."""
+        hypotheses = [
+            {"hypothesis": "best", "confidence": 0.9, "explains": [0, 1]},
+            {"hypothesis": "worse", "confidence": 0.5, "explains": [0]}
+        ]
+        observations = ["server slow", "database error"]
+
+        best = evaluate_best_explanation(hypotheses, observations)
+
+        assert best == hypotheses[0]  # Should return the highest confidence hypothesis
+
+    def test_evaluate_best_explanation_empty_list(self):
+        """Test best explanation evaluation with empty list."""
+        best = evaluate_best_explanation([], ["observation"])
+        assert best is None

@@ -12,6 +12,7 @@ import time
 import pytest
 
 from reasoning_library.chain_of_thought import (
+    _MAX_CONVERSATIONS,
     _conversations,
     _conversations_lock,
     _validate_conversation_id,
@@ -680,6 +681,16 @@ def run_all_tests():
     else:
         print("\n🎉 All chain of thought tests passed!")
         return True
+
+
+class TestChainOfThoughtImports:
+    """Test chain_of_thought module imports and backward compatibility aliases."""
+
+    def test_max_conversations_alias(self):
+        """Test _MAX_CONVERSATIONS backward compatibility alias."""
+        # The alias should be a positive integer
+        assert isinstance(_MAX_CONVERSATIONS, int)
+        assert _MAX_CONVERSATIONS > 0
 
 
 if __name__ == "__main__":
