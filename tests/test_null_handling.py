@@ -78,6 +78,17 @@ class TestSafeListCoalesce:
         result = safe_list_coalesce("not_a_list")
         assert result == []
 
+    def test_object_that_cant_convert_returns_empty_list(self):
+        """Test objects that can't be converted to list return empty list."""
+        # object() has __iter__ but converting to list should work
+        # Use a custom object that has __iter__ but fails when converted
+        class BadIterable:
+            def __iter__(self):
+                raise TypeError("Cannot iterate")
+
+        result = safe_list_coalesce(BadIterable())
+        assert result == []
+
 
 class TestSafeDictCoalesce:
     """Test the safe_dict_coalesce utility function."""
@@ -250,6 +261,33 @@ class TestWithNullSafety:
     def test_boolean_exception_handling(self):
         """Test boolean exception handling."""
         @with_null_safety(expected_return_type=bool)
+        def test_func():
+            raise ValueError("Test error")
+
+        result = test_func()
+        assert result is NO_VALUE
+
+    def test_list_exception_handling(self):
+        """Test list exception handling."""
+        @with_null_safety(expected_return_type=list)
+        def test_func():
+            raise ValueError("Test error")
+
+        result = test_func()
+        assert result == EMPTY_LIST
+
+    def test_dict_exception_handling(self):
+        """Test dict exception handling."""
+        @with_null_safety(expected_return_type=dict)
+        def test_func():
+            raise ValueError("Test error")
+
+        result = test_func()
+        assert result == EMPTY_DICT
+
+    def test_unsupported_type_exception_handling(self):
+        """Test unsupported type exception handling."""
+        @with_null_safety(expected_return_type=int)
         def test_func():
             raise ValueError("Test error")
 
