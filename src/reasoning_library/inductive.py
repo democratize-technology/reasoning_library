@@ -246,7 +246,7 @@ def _calculate_pattern_quality_streaming(
     Returns:
         float: Pattern quality factor (0.1 - 1.0)
     """
-    len(values_array)
+    n = len(values_array)
 
     if pattern_type == "arithmetic":
         # Streaming calculation of mean absolute difference
@@ -331,14 +331,14 @@ def _calculate_arithmetic_confidence(
     Returns:
         float: Adjusted confidence score (0.0 - 1.0)
     """
-        data_sufficiency_factor = _assess_data_sufficiency(sequence_length, "arithmetic")
+    data_sufficiency_factor = _assess_data_sufficiency(sequence_length, "arithmetic")
 
-        pattern_quality_factor = _calculate_pattern_quality_score_optimized(differences,
-                                                                        "arithmetic")
+    pattern_quality_factor = _calculate_pattern_quality_score_optimized(differences,
+                                                                    "arithmetic")
 
-        complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_ARITHMETIC)  # complexity_score = 0 for arithmetic
+    complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_ARITHMETIC)  # complexity_score = 0 for arithmetic
 
-        confidence = (
+    confidence = (
         base_confidence
         * data_sufficiency_factor
         * pattern_quality_factor
@@ -362,14 +362,14 @@ def _calculate_geometric_confidence(
     Returns:
         float: Adjusted confidence score (0.0 - 1.0)
     """
-        data_sufficiency_factor = _assess_data_sufficiency(sequence_length, "geometric")
+    data_sufficiency_factor = _assess_data_sufficiency(sequence_length, "geometric")
 
-        pattern_quality_factor = _calculate_pattern_quality_score_optimized(ratios,
-                                                                        "geometric")
+    pattern_quality_factor = _calculate_pattern_quality_score_optimized(ratios,
+                                                                    "geometric")
 
-        complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_GEOMETRIC)  # complexity_score = 0.1 for geometric
+    complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_GEOMETRIC)  # complexity_score = 0.1 for geometric
 
-        confidence = (
+    confidence = (
         base_confidence
         * data_sufficiency_factor
         * pattern_quality_factor
@@ -688,11 +688,11 @@ def _calculate_recursive_confidence(
     minimum_required = DATA_SUFFICIENCY_MINIMUM_RECURSIVE  # Need at least 5 terms for reliable recursive detection
     data_sufficiency_factor = min(1.0, sequence_length / minimum_required)
 
-        pattern_quality_factor = match_score
+    pattern_quality_factor = match_score
 
-        complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_RECURSIVE)  # complexity_score = 0.3 for recursive
+    complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_RECURSIVE)  # complexity_score = 0.3 for recursive
 
-        confidence = (
+    confidence = (
         base_confidence
         * data_sufficiency_factor
         * pattern_quality_factor
@@ -720,7 +720,7 @@ def _calculate_polynomial_confidence(
     Returns:
         float: Adjusted confidence score (0.0 - 1.0)
     """
-        minimum_required = degree + DATA_SUFFICIENCY_MINIMUM_POLYNOMIAL  # Need at least degree + 3 points for reliable fit
+    minimum_required = degree + DATA_SUFFICIENCY_MINIMUM_POLYNOMIAL  # Need at least degree + 3 points for reliable fit
     data_sufficiency_factor = min(1.0, sequence_length / minimum_required)
 
     # Pattern quality factor - based on R - squared
@@ -729,7 +729,7 @@ def _calculate_polynomial_confidence(
     # Complexity factor - higher degree polynomials are more complex
     complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_POLYNOMIAL_DEGREE_FACTOR * degree)
 
-        confidence = (
+    confidence = (
         base_confidence
         * data_sufficiency_factor
         * pattern_quality_factor

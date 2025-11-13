@@ -482,10 +482,9 @@ class TestAbductiveInternalFunctions:
 
     def test_generate_causal_chain_hypothesis(self):
         """Test causal chain hypothesis generation."""
-        common_themes = ["deploy", "server", "slow"]
         observations_count = 2
 
-        hypothesis = _generate_causal_chain_hypothesis(common_themes, observations_count)
+        hypothesis = _generate_causal_chain_hypothesis(observations_count)
 
         assert hypothesis is not None
         assert "hypothesis" in hypothesis
@@ -510,9 +509,10 @@ class TestAbductiveInternalFunctions:
         """Test domain template hypothesis generation."""
         observations = ["server slow", "database error"]
         context = "web application"
-        keywords = {"actions": ["deploy"], "components": ["server"], "issues": ["slow"]}
+        max_hypotheses = 3
+        observations_count = len(observations)
 
-        hypotheses = _generate_domain_template_hypotheses(observations, context, keywords)
+        hypotheses = _generate_domain_template_hypotheses(observations, context, max_hypotheses, observations_count)
 
         assert isinstance(hypotheses, list)
         if hypotheses:  # May be empty if no domain matches
@@ -535,10 +535,9 @@ class TestAbductiveInternalFunctions:
 
     def test_generate_systemic_hypothesis(self):
         """Test systemic hypothesis generation."""
-        observations = ["server slow", "database error", "network timeout"]
         observations_count = 3
 
-        hypothesis = _generate_systemic_hypothesis(observations, observations_count)
+        hypothesis = _generate_systemic_hypothesis(observations_count)
 
         assert hypothesis is not None
         assert "hypothesis" in hypothesis
@@ -552,8 +551,9 @@ class TestAbductiveInternalFunctions:
             {"hypothesis": "low confidence", "confidence": 0.3},
             {"hypothesis": "medium confidence", "confidence": 0.6}
         ]
+        new_evidence = ["supporting evidence"]
 
-        ranked = rank_hypotheses(hypotheses)
+        ranked = rank_hypotheses(hypotheses, new_evidence, None)
 
         assert len(ranked) == 3
         # Should be sorted by confidence descending
@@ -565,13 +565,19 @@ class TestAbductiveInternalFunctions:
             {"hypothesis": "best", "confidence": 0.9, "explains": [0, 1]},
             {"hypothesis": "worse", "confidence": 0.5, "explains": [0]}
         ]
-        observations = ["server slow", "database error"]
 
-        best = evaluate_best_explanation(hypotheses, observations)
+        best = evaluate_best_explanation(hypotheses, None)
 
-        assert best == hypotheses[0]  # Should return the highest confidence hypothesis
+        # Should return the highest confidence hypothesis with evaluation metadata
+        assert best["hypothesis"] == "best"
+        assert best["confidence"] == 0.9
+        assert "evaluation" in best
+        assert best["evaluation"]["selected_as_best"] is True
 
     def test_evaluate_best_explanation_empty_list(self):
         """Test best explanation evaluation with empty list."""
-        best = evaluate_best_explanation([], ["observation"])
-        assert best is None
+        from reasoning_library.exceptions import ValidationError
+        import pytest
+
+        with pytest.raises(ValidationError):
+            evaluate_best_explanation([], None)

@@ -165,7 +165,7 @@ def _get_math_detection_cached(func: Callable[...,
         _math_detection_cache[func_id] = result
         return result
 
-def _manage_registry_size():
+def _manage_registry_size() -> None:
     """
     Manage registry size to prevent unbounded growth and memory exhaustion attacks.
 

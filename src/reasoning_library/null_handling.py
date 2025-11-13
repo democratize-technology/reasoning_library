@@ -5,26 +5,44 @@ This module provides standardized patterns for representing "no value" scenarios
 and ensures consistent handling of None, empty strings, and empty collections.
 """
 
-from typing import Any, List, Dict, Optional, Callable
+from typing import Any, List, Dict, Optional, Callable, TypeVar, Union, cast
 from functools import wraps
+
+# Type variables for generic functions
+T = TypeVar('T')
+U = TypeVar('U')
 
 NO_VALUE = None
 EMPTY_STRING = ""
-EMPTY_LIST = []
-EMPTY_DICT = {}
+EMPTY_LIST: List[Any] = []
+EMPTY_DICT: Dict[str, Any] = {}
 
 
-def safe_none_coalesce(value: Any, default: Any, converter: Optional[Callable[[Any], Any]] = None) -> Any:
+def safe_none_coalesce(
+    value: Optional[T],
+    default: T,
+    converter: Optional[Callable[[T], U]] = None
+) -> Union[T, U]:
     """
     Safely coalesce None values to defaults with optional conversion.
 
+    This function provides type-safe null handling by preserving type information
+    through generic type parameters.
+
+    Type Parameters:
+        T: The type of the input value and default
+        U: The type of the converted output (if converter is provided)
+
     Args:
-        value: The value to check
-        default: Default value if value is None
-        converter: Optional converter function to apply to non-None values
+        value: The optional value to check (None or type T)
+        default: Default value of type T to use if value is None
+        converter: Optional converter function from T to U
 
     Returns:
-        value converted and applied, or default if value is None
+        Either the original value (T), converted value (U), or default (T)
+        - If value is None: returns default (T)
+        - If converter provided and value is not None: returns converter(value) (U)
+        - Otherwise: returns value (T)
     """
     if value is None:
         return default
@@ -60,6 +78,7 @@ def safe_list_coalesce(value: Optional[List[Any]]) -> List[Any]:
         except (TypeError, ValueError):
             return []
 
+    # Invalid type - return empty list as fallback
     return []
 
 
@@ -107,41 +126,52 @@ def safe_string_coalesce(value: Optional[str]) -> str:
     return value
 
 
-def normalize_none_return(value: Any, expected_type: type) -> Any:
+def normalize_none_return(value: Any, expected_type: type[T]) -> T:
     """
     Normalize return values to maintain consistent None patterns.
 
+    Type Parameters:
+        T: The expected return type
+
     Args:
         value: The value to normalize
-        expected_type: The expected return type
+        expected_type: The expected return type (type[T])
 
     Returns:
-        Normalized value (None for no result, properly typed for success)
+        Normalized value of type T with consistent null patterns
     """
+    # Handle None values based on expected type
     if value is None:
         if expected_type == list:
-            return EMPTY_LIST
+            return EMPTY_LIST  # type: ignore[return-value]
         elif expected_type == dict:
-            return EMPTY_DICT
+            return EMPTY_DICT  # type: ignore[return-value]
         elif expected_type == str:
-            return EMPTY_STRING
+            return EMPTY_STRING  # type: ignore[return-value]
         else:
-            return NO_VALUE
+            return cast(T, NO_VALUE)
 
+    # Handle boolean values
     if expected_type == bool and isinstance(value, bool):
-        return value
+        return value  # type: ignore[return-value]
 
+    # Handle collection types with appropriate coalescing
     if expected_type == list:
-        return safe_list_coalesce(value)
+        return safe_list_coalesce(value)  # type: ignore[return-value]
     elif expected_type == dict:
-        return safe_dict_coalesce(value)
+        return safe_dict_coalesce(value)  # type: ignore[return-value]
     elif expected_type == str:
-        return safe_string_coalesce(value)
+        return safe_string_coalesce(value)  # type: ignore[return-value]
 
-        return value
+    # For other types, ensure type compatibility
+    if isinstance(value, expected_type):
+        return value  # type: ignore[return-value]
+
+    # Type conversion fallback - may raise TypeError if conversion fails
+    return expected_type(value)  # type: ignore[call-arg]
 
 
-def handle_optional_params(**kwargs) -> Dict[str, Any]:
+def handle_optional_params(**kwargs: Any) -> Dict[str, Any]:
     """
     Standardize optional parameter handling across the codebase.
 
@@ -167,7 +197,7 @@ def handle_optional_params(**kwargs) -> Dict[str, Any]:
     return normalized
 
 
-def with_null_safety(expected_return_type: type = Any):
+def with_null_safety(expected_return_type: type = Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Decorator for standardizing null handling in function returns.
 
@@ -177,9 +207,9 @@ def with_null_safety(expected_return_type: type = Any):
     Returns:
         Decorated function with standardized null handling
     """
-    def decorator(func):
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
                 result = func(*args, **kwargs)
                 return normalize_none_return(result, expected_return_type)

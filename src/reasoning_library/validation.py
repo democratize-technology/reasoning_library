@@ -6,9 +6,39 @@ used in public APIs, ensuring robust input validation and preventing
 type-related security vulnerabilities.
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union, TypedDict
+
+# For Python < 3.11 compatibility, we'll use total=False to make fields optional
+# instead of using NotRequired
+
 import re
 from .exceptions import ValidationError
+
+
+# TypedDict definitions for type-safe data structures
+class Hypothesis(TypedDict, total=False):
+    """Type-safe representation of a hypothesis with confidence scoring."""
+    hypothesis: str
+    confidence: Union[int, float, str, None]
+    evidence: str
+    coverage: Union[int, float]
+    simplicity: Union[int, float]
+    specificity: Union[int, float]
+
+
+class ToolParameter(TypedDict, total=True):
+    """Type-safe representation of a tool parameter specification."""
+    name: str
+    type: str
+    description: str
+    required: bool
+
+
+class ToolSpecification(TypedDict, total=True):
+    """Type-safe representation of a tool specification."""
+    name: str
+    description: str
+    parameters: Dict[str, ToolParameter]
 
 
 def validate_string_list(
@@ -115,7 +145,7 @@ def validate_dict_schema(
             if key not in all_allowed_keys:
                 raise ValidationError(f"{field_name} contains unexpected key: {key}")
 
-  validated_dict = {}
+    validated_dict = {}
     for key, val in value.items():
         if key in key_types:
             expected_type = key_types[key]
@@ -147,7 +177,7 @@ def validate_hypothesis_dict(
     hypothesis: Dict[str, Any],
     field_name: str,
     index: Optional[int] = None
-) -> Dict[str, Any]:
+) -> Hypothesis:
     """
     Validate a single hypothesis dictionary structure.
 
@@ -157,14 +187,14 @@ def validate_hypothesis_dict(
         index: Index of the hypothesis in a list (for error messages)
 
     Returns:
-        Dict[str, Any] if validation passes
+        Validated hypothesis as type-safe Hypothesis TypedDict
 
     Raises:
         ValidationError: If validation fails
     """
     prefix = f"{field_name}[{index}]" if index is not None else field_name
 
-        def validate_confidence_with_index(confidence: Union[int, float, str, None]) -> float:
+    def validate_confidence_with_index(confidence: Union[int, float, str, None]) -> float:
         from .abductive import _validate_confidence_value  # Import from abductive for consistent error messages
         return _validate_confidence_value(confidence, index)
 
@@ -217,7 +247,7 @@ def validate_hypotheses_list(
     hypotheses: Optional[List[Dict[str, Any]]],
     field_name: str,
     max_hypotheses: Optional[int] = None
-) -> Optional[List[Dict[str, Any]]]:
+) -> Optional[List[Hypothesis]]:
     """
     Validate a list of hypothesis dictionaries.
 
@@ -294,7 +324,7 @@ def validate_metadata_dict(
             if not re.match(allowed_key_pattern, key):
                 raise ValidationError(f"{field_name} key '{key}' does not match allowed pattern")
 
-                if isinstance(value, str):
+        if isinstance(value, str):
             if len(value) > max_string_length:
                 raise ValidationError(f"{field_name}[{key}] string exceeds maximum length of {max_string_length}")
             validated_metadata[key] = value
@@ -317,7 +347,7 @@ def validate_metadata_dict(
     return validated_metadata
 
 
-def validate_parameters(**validators):
+def validate_parameters(**validators) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """
     Decorator to validate function parameters using provided validators.
 
