@@ -8,11 +8,10 @@ and ensures consistent handling of None, empty strings, and empty collections.
 from typing import Any, List, Dict, Optional, Callable
 from functools import wraps
 
-# Constants for representing "no value" consistently
-NO_VALUE = None  # Use for missing/unknown values
-EMPTY_STRING = ""  # Use for explicitly empty string values
-EMPTY_LIST = []  # Use for explicitly empty list values
-EMPTY_DICT = {}  # Use for explicitly empty dictionary values
+NO_VALUE = None
+EMPTY_STRING = ""
+EMPTY_LIST = []
+EMPTY_DICT = {}
 
 
 def safe_none_coalesce(value: Any, default: Any, converter: Optional[Callable[[Any], Any]] = None) -> Any:
@@ -55,7 +54,6 @@ def safe_list_coalesce(value: Optional[List[Any]]) -> List[Any]:
     if isinstance(value, list):
         return value
 
-    # Only convert actual iterables that make sense as lists, not strings
     if hasattr(value, '__iter__') and not isinstance(value, (str, bytes)):
         try:
             return list(value)
@@ -121,7 +119,6 @@ def normalize_none_return(value: Any, expected_type: type) -> Any:
         Normalized value (None for no result, properly typed for success)
     """
     if value is None:
-        # Return appropriate empty type based on expected type
         if expected_type == list:
             return EMPTY_LIST
         elif expected_type == dict:
@@ -131,11 +128,9 @@ def normalize_none_return(value: Any, expected_type: type) -> Any:
         else:
             return NO_VALUE
 
-    # Handle boolean returns specifically
     if expected_type == bool and isinstance(value, bool):
         return value
 
-    # Handle collection types
     if expected_type == list:
         return safe_list_coalesce(value)
     elif expected_type == dict:
@@ -143,8 +138,7 @@ def normalize_none_return(value: Any, expected_type: type) -> Any:
     elif expected_type == str:
         return safe_string_coalesce(value)
 
-    # For other types, return as-is if not None
-    return value
+        return value
 
 
 def handle_optional_params(**kwargs) -> Dict[str, Any]:
@@ -190,7 +184,6 @@ def with_null_safety(expected_return_type: type = Any):
                 result = func(*args, **kwargs)
                 return normalize_none_return(result, expected_return_type)
             except Exception:
-                # On exception, return appropriate "no value"
                 if expected_return_type == bool:
                     return NO_VALUE
                 elif expected_return_type == list:
@@ -205,7 +198,6 @@ def with_null_safety(expected_return_type: type = Any):
     return decorator
 
 
-# Standardized initialization patterns
 def init_optional_bool(default_value: Optional[bool] = None) -> Optional[bool]:
     """Initialize optional boolean with consistent pattern."""
     return default_value

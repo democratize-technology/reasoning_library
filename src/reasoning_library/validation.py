@@ -106,22 +106,17 @@ def validate_dict_schema(
     key_types = key_types or {}
     value_validators = value_validators or {}
 
-    # Check required keys
     for key in required_keys:
         if key not in value:
             raise ValidationError(f"{field_name} missing required key: {key}")
-
-    # Check for unexpected keys
     all_allowed_keys = set(required_keys + optional_keys)
     if not allow_extra_keys:
         for key in value:
             if key not in all_allowed_keys:
                 raise ValidationError(f"{field_name} contains unexpected key: {key}")
 
-    # Validate key types and values
-    validated_dict = {}
+  validated_dict = {}
     for key, val in value.items():
-        # Check key type
         if key in key_types:
             expected_type = key_types[key]
             if not isinstance(val, expected_type):
@@ -169,8 +164,7 @@ def validate_hypothesis_dict(
     """
     prefix = f"{field_name}[{index}]" if index is not None else field_name
 
-    # Create a confidence validator that includes hypothesis index in error messages
-    def validate_confidence_with_index(confidence: Union[int, float, str, None]) -> float:
+        def validate_confidence_with_index(confidence: Union[int, float, str, None]) -> float:
         from .abductive import _validate_confidence_value  # Import from abductive for consistent error messages
         return _validate_confidence_value(confidence, index)
 
@@ -210,7 +204,6 @@ def validate_confidence_value(confidence: Union[int, float, str, None]) -> float
     if not isinstance(confidence, (int, float)):
         raise ValidationError(f"Confidence value '{confidence}' must be numeric (int or float), got {type(confidence).__name__}")
 
-    # Check for NaN or infinity
     if isinstance(confidence, float):
         if confidence != confidence:  # NaN check
             raise ValidationError(f"Confidence cannot be NaN")
@@ -301,8 +294,7 @@ def validate_metadata_dict(
             if not re.match(allowed_key_pattern, key):
                 raise ValidationError(f"{field_name} key '{key}' does not match allowed pattern")
 
-        # Validate value - allow basic types with size limits
-        if isinstance(value, str):
+                if isinstance(value, str):
             if len(value) > max_string_length:
                 raise ValidationError(f"{field_name}[{key}] string exceeds maximum length of {max_string_length}")
             validated_metadata[key] = value
@@ -325,7 +317,6 @@ def validate_metadata_dict(
     return validated_metadata
 
 
-# Decorator for function validation
 def validate_parameters(**validators):
     """
     Decorator to validate function parameters using provided validators.

@@ -85,8 +85,7 @@ def _validate_and_sanitize_input_size(
     if not observations:
         return [], context
 
-    # Validate and truncate each observation
-    sanitized_observations = []
+        sanitized_observations = []
     for obs in observations:
         if not isinstance(obs, str):
             obs = str(obs)
@@ -95,8 +94,7 @@ def _validate_and_sanitize_input_size(
             obs = obs[:max_observation_length].strip()
         sanitized_observations.append(obs)
 
-    # Validate and truncate context
-    if context is not None:
+        if context is not None:
         if not isinstance(context, str):
             context = str(context)
         if len(context) > max_context_length:
@@ -122,21 +120,18 @@ def _validate_confidence_value(confidence: Any, hypothesis_index: Optional[int] 
     """
     hypothesis_ref = f" (hypothesis #{hypothesis_index})" if hypothesis_index is not None else ""
 
-    # Check type - must be numeric
-    if not isinstance(confidence, (int, float)):
+        if not isinstance(confidence, (int, float)):
         raise ValidationError(
             f"Confidence value '{confidence}' must be numeric (int or float), got {type(confidence).__name__}{hypothesis_ref}"
         )
 
-    # Check for NaN or infinity
-    if isinstance(confidence, float):
+        if isinstance(confidence, float):
         if confidence != confidence:  # NaN check
             raise ValidationError(f"Confidence cannot be NaN{hypothesis_ref}")
         if confidence in (float('inf'), float('-inf')):
             raise ValidationError(f"Confidence cannot be infinite{hypothesis_ref}")
 
-    # Convert to float and clamp to valid range [0.0, 1.0]
-    try:
+        try:
         normalized_confidence = float(confidence)
         # Clamp to valid range
         normalized_confidence = max(CONFIDENCE_MIN, min(CONFIDENCE_MAX, normalized_confidence))
@@ -166,20 +161,16 @@ def _calculate_hypothesis_confidence(
     Returns:
         float: Confidence score (0.0 - 1.0)
     """
-    # Coverage factor: how many observations are explained
-    coverage_factor = (
+        coverage_factor = (
         explained_observations / total_observations
         if total_observations > 0 else CONFIDENCE_MIN
     )
 
-    # Simplicity factor: prefer hypotheses with fewer assumptions (Occam's razor)
-    simplicity_factor = 1.0 / (1.0 + SIMPLICITY_ASSUMPTION_PENALTY * assumption_count)
+        simplicity_factor = 1.0 / (1.0 + SIMPLICITY_ASSUMPTION_PENALTY * assumption_count)
 
-    # Specificity factor: more specific hypotheses get higher confidence
-    specificity_factor = min(CONFIDENCE_MAX, len(hypothesis.get("testable_predictions", [])) / SPECIFICITY_PREDICTIONS_MINIMUM)
+        specificity_factor = min(CONFIDENCE_MAX, len(hypothesis.get("testable_predictions", [])) / SPECIFICITY_PREDICTIONS_MINIMUM)
 
-    # Calculate final confidence
-    confidence = (
+        confidence = (
         base_confidence * coverage_factor * simplicity_factor * specificity_factor
     )
 
@@ -196,36 +187,28 @@ def _extract_keywords(text: str) -> List[str]:
     Returns:
         List[str]: List of relevant keywords
     """
-    # Simple keyword extraction - remove common words and extract meaningful terms
-    common_words = {
+        common_words = {
         'the', 'is', 'at', 'which', 'on', 'a', 'an', 'and', 'or', 'but', 'in', 'with',
         'to', 'for', 'o', 'as', 'by', 'that', 'this', 'it', 'from', 'are', 'be', 'was',
         'were', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would',
         'could', 'should', 'may', 'might', 'can', 'must', 'shall', 'very', 'really'
     }
 
-    # Convert to lowercase and extract words safely without ReDoS vulnerability
-    # Fixed pattern prevents catastrophic backtracking by avoiding complex \b boundaries
-    # This is a safer, non - backtracking alternative to r'\b\w+\b'
-    words = re.findall(r'[a-zA-Z0-9]+', text.lower())
+        words = re.findall(r'[a-zA-Z0-9]+', text.lower())
 
-    # Filter out common words and short words
-    keywords = [word for word in words if word not in common_words and len(word) > MIN_KEYWORD_LENGTH]
+        keywords = [word for word in words if word not in common_words and len(word) > MIN_KEYWORD_LENGTH]
 
-    # Prioritize more meaningful keywords by removing less informative ones
-    less_informative = {'about', 'like', 'just', 'then', 'than', 'some', 'more', 'most'}
+        less_informative = {'about', 'like', 'just', 'then', 'than', 'some', 'more', 'most'}
     keywords = [word for word in keywords if word not in less_informative]
 
-    # Return unique keywords while preserving some order (longer and earlier words first)
-    unique_keywords = []
+        unique_keywords = []
     seen = set()
     for word in keywords:
         if word not in seen:
             seen.add(word)
             unique_keywords.append(word)
 
-    # Sort by length (longer first) and position, to prioritize more meaningful terms
-    unique_keywords.sort(key=lambda w: (-len(w), keywords.index(w)))
+        unique_keywords.sort(key=lambda w: (-len(w), keywords.index(w)))
 
     return unique_keywords[:MAX_TEMPLATE_KEYWORDS]  # Limit to max keywords
 

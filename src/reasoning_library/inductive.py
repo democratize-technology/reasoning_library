@@ -62,7 +62,6 @@ from .constants import (
     CONFIDENCE_MAX,
 )
 
-# Backwards compatibility aliases for tests
 _COMPUTATION_TIMEOUT = COMPUTATION_TIMEOUT
 _MAX_SEQUENCE_LENGTH = MAX_SEQUENCE_LENGTH
 _VALUE_MAGNITUDE_LIMIT = VALUE_MAGNITUDE_LIMIT
@@ -86,7 +85,6 @@ def _validate_sequence_input(sequence: List[float], function_name: str) -> None:
             "This restriction prevents DoS attacks."
         )
 
-    # Check for values that could cause computational issues
     for i, value in enumerate(sequence):
         if not np.isfinite(value):
             raise ValidationError(
@@ -333,18 +331,14 @@ def _calculate_arithmetic_confidence(
     Returns:
         float: Adjusted confidence score (0.0 - 1.0)
     """
-    # Data sufficiency factor
-    data_sufficiency_factor = _assess_data_sufficiency(sequence_length, "arithmetic")
+        data_sufficiency_factor = _assess_data_sufficiency(sequence_length, "arithmetic")
 
-    # Pattern quality factor (using optimized calculation)
-    pattern_quality_factor = _calculate_pattern_quality_score_optimized(differences,
+        pattern_quality_factor = _calculate_pattern_quality_score_optimized(differences,
                                                                         "arithmetic")
 
-    # Complexity factor (arithmetic is simplest pattern)
-    complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_ARITHMETIC)  # complexity_score = 0 for arithmetic
+        complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_ARITHMETIC)  # complexity_score = 0 for arithmetic
 
-    # Calculate final confidence
-    confidence = (
+        confidence = (
         base_confidence
         * data_sufficiency_factor
         * pattern_quality_factor
@@ -368,18 +362,14 @@ def _calculate_geometric_confidence(
     Returns:
         float: Adjusted confidence score (0.0 - 1.0)
     """
-    # Data sufficiency factor
-    data_sufficiency_factor = _assess_data_sufficiency(sequence_length, "geometric")
+        data_sufficiency_factor = _assess_data_sufficiency(sequence_length, "geometric")
 
-    # Pattern quality factor (using optimized calculation)
-    pattern_quality_factor = _calculate_pattern_quality_score_optimized(ratios,
+        pattern_quality_factor = _calculate_pattern_quality_score_optimized(ratios,
                                                                         "geometric")
 
-    # Complexity factor (geometric is slightly more complex than arithmetic)
-    complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_GEOMETRIC)  # complexity_score = 0.1 for geometric
+        complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_GEOMETRIC)  # complexity_score = 0.1 for geometric
 
-    # Calculate final confidence
-    confidence = (
+        confidence = (
         base_confidence
         * data_sufficiency_factor
         * pattern_quality_factor
@@ -698,14 +688,11 @@ def _calculate_recursive_confidence(
     minimum_required = DATA_SUFFICIENCY_MINIMUM_RECURSIVE  # Need at least 5 terms for reliable recursive detection
     data_sufficiency_factor = min(1.0, sequence_length / minimum_required)
 
-    # Pattern quality factor - how perfect the match is
-    pattern_quality_factor = match_score
+        pattern_quality_factor = match_score
 
-    # Complexity factor - recursive is more complex than arithmetic
-    complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_RECURSIVE)  # complexity_score = 0.3 for recursive
+        complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_RECURSIVE)  # complexity_score = 0.3 for recursive
 
-    # Calculate final confidence
-    confidence = (
+        confidence = (
         base_confidence
         * data_sufficiency_factor
         * pattern_quality_factor
@@ -733,8 +720,7 @@ def _calculate_polynomial_confidence(
     Returns:
         float: Adjusted confidence score (0.0 - 1.0)
     """
-    # Data sufficiency factor
-    minimum_required = degree + DATA_SUFFICIENCY_MINIMUM_POLYNOMIAL  # Need at least degree + 3 points for reliable fit
+        minimum_required = degree + DATA_SUFFICIENCY_MINIMUM_POLYNOMIAL  # Need at least degree + 3 points for reliable fit
     data_sufficiency_factor = min(1.0, sequence_length / minimum_required)
 
     # Pattern quality factor - based on R - squared
@@ -743,8 +729,7 @@ def _calculate_polynomial_confidence(
     # Complexity factor - higher degree polynomials are more complex
     complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_POLYNOMIAL_DEGREE_FACTOR * degree)
 
-    # Calculate final confidence
-    confidence = (
+        confidence = (
         base_confidence
         * data_sufficiency_factor
         * pattern_quality_factor

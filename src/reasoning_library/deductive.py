@@ -11,7 +11,6 @@ from .core import ReasoningChain, curry, tool_spec
 from .null_handling import init_optional_bool, with_null_safety
 from .exceptions import ValidationError
 
-# --- Base Logical Primitives (Pure Functions) ---
 
 
 @curry
@@ -126,7 +125,6 @@ def implies_with_confidence(p: bool, q: bool) -> Tuple[bool, float]:
     return result, 1.0
 
 
-# --- Composed Deductive Reasoning: Modus Ponens ---
 
 
 @curry
@@ -224,7 +222,6 @@ def apply_modus_ponens(
     return conclusion
 
 
-# --- Higher - Order Function for Chaining Deductions ---
 
 
 def chain_deductions(

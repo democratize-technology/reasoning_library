@@ -34,8 +34,6 @@ from .constants import (
     MAX_TEMPLATE_KEYWORDS,
 )
 
-# Pre - compiled regex patterns with ReDoS vulnerability fixes
-# Using more specific patterns to avoid catastrophic backtracking
 FACTOR_PATTERN = re.compile(
     rf"(\w{{0,{REGEX_WORD_CHAR_MAX}}}(?:data_sufficiency | pattern_quality | complexity)_factor)[\s]{{0,5}}(?:\*|,|\+|\-|=)",
     re.IGNORECASE | re.MULTILINE,
@@ -53,25 +51,15 @@ COMBINATION_PATTERN = re.compile(
 )
 CLEAN_FACTOR_PATTERN = re.compile(r"[()=\*]+", re.IGNORECASE)
 
-# --- Performance Optimization Caches ---
-
-# Function source code cache using weak references to prevent memory leaks
 _function_source_cache: weakref.WeakKeyDictionary[Callable, str] = weakref.WeakKeyDictionary()
 
-# Mathematical reasoning detection cache using function id for key stability
 _math_detection_cache: Dict[int, Tuple[bool, Optional[str], Optional[str]]] = {}
 
-# Cache size limit and registry limits are now imported from constants module
-# _MAX_CACHE_SIZE and _MAX_REGISTRY_SIZE are replaced by MAX_CACHE_SIZE and MAX_REGISTRY_SIZE
-
-# Backwards compatibility aliases for tests
 _MAX_CACHE_SIZE = MAX_CACHE_SIZE
 _MAX_REGISTRY_SIZE = MAX_REGISTRY_SIZE
 
-# Thread - safe locks for registry operations
 _registry_lock = threading.RLock()
 
-# Thread - safe locks for cache operations
 _cache_lock = threading.RLock()
 
 def _get_function_source_cached(func: Callable[..., Any]) -> str:
@@ -93,21 +81,12 @@ def _get_function_source_cached(func: Callable[..., Any]) -> str:
     Returns:
         str: Always empty string for security reasons
     """
-    # SECURITY: Source code inspection disabled to prevent information disclosure
-    # The inspect.getsource() function can access files on disk and expose sensitive
-    # information including API keys, passwords, and proprietary algorithms.
-    # This function now returns empty string for all inputs to eliminate the attack vector.
-
-    # Thread - safe cache access with proper locking
     with _cache_lock:
         # Check cache first (WeakKeyDictionary automatically handles cleanup)
         if func in _function_source_cache:
             return _function_source_cache[func]
 
-        # Always return empty string for security - prevents any source code disclosure
         empty_result = ""
-
-        # Cache the empty result to maintain expected behavior and performance
         _function_source_cache[func] = empty_result
         return empty_result
 
