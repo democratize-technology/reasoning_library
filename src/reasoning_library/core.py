@@ -7,7 +7,7 @@ import re
 import threading
 import weakref
 from dataclasses import dataclass, field
-from functools import wraps
+from functools import wraps, lru_cache
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from .exceptions import ValidationError
@@ -35,22 +35,52 @@ from .constants import (
     MAX_TEMPLATE_KEYWORDS,
 )
 
-FACTOR_PATTERN = re.compile(
-    rf"(\w{{0,{REGEX_WORD_CHAR_MAX}}}(?:data_sufficiency | pattern_quality | complexity)_factor)[\s]{{0,5}}(?:\*|,|\+|\-|=)",
-    re.IGNORECASE | re.MULTILINE,
-)
-COMMENT_PATTERN = re.compile(
-    r"#\s*(?:Data | Pattern | Complexity)\s+([^#\n]+factor)", re.IGNORECASE | re.MULTILINE
-)
-EVIDENCE_PATTERN = re.compile(
-    r'f?"[^"]*(?:confidence\s + based\s + on | factors?[\s:]*in)[^"]*([^"\.]+pattern[^"\.]*)',
-    re.IGNORECASE | re.MULTILINE,
-)
-COMBINATION_PATTERN = re.compile(
-    rf"(\w{{1,{REGEX_WORD_CHAR_MAX}}}_factor)[\s]{{0,{REGEX_SPACING_MAX}}}\*[\s]{{0,{REGEX_SPACING_MAX}}}(\w{{1,{REGEX_WORD_CHAR_MAX}}}_factor)",
-    re.IGNORECASE | re.MULTILINE,
-)
-CLEAN_FACTOR_PATTERN = re.compile(r"[()=\*]+", re.IGNORECASE)
+# LAZY LOADING: Regex patterns are compiled on-demand to improve module import performance
+# This reduces startup overhead by only compiling patterns when actually used
+
+@lru_cache(maxsize=None)
+def _get_factor_pattern() -> re.Pattern:
+    """Get factor pattern with lazy compilation for performance optimization."""
+    return re.compile(
+        rf"(\w{{0,{REGEX_WORD_CHAR_MAX}}}(?:data_sufficiency | pattern_quality | complexity)_factor)[\s]{{0,5}}(?:\*|,|\+|\-|=)",
+        re.IGNORECASE | re.MULTILINE,
+    )
+
+@lru_cache(maxsize=None)
+def _get_comment_pattern() -> re.Pattern:
+    """Get comment pattern with lazy compilation for performance optimization."""
+    return re.compile(
+        r"#\s*(?:Data | Pattern | Complexity)\s+([^#\n]+factor)", re.IGNORECASE | re.MULTILINE
+    )
+
+@lru_cache(maxsize=None)
+def _get_evidence_pattern() -> re.Pattern:
+    """Get evidence pattern with lazy compilation for performance optimization."""
+    return re.compile(
+        r'f?"[^"]*(?:confidence\s + based\s + on | factors?[\s:]*in)[^"]*([^"\.]+pattern[^"\.]*)',
+        re.IGNORECASE | re.MULTILINE,
+    )
+
+@lru_cache(maxsize=None)
+def _get_combination_pattern() -> re.Pattern:
+    """Get combination pattern with lazy compilation for performance optimization."""
+    return re.compile(
+        rf"(\w{{1,{REGEX_WORD_CHAR_MAX}}}_factor)[\s]{{0,{REGEX_SPACING_MAX}}}\*[\s]{{0,{REGEX_SPACING_MAX}}}(\w{{1,{REGEX_WORD_CHAR_MAX}}}_factor)",
+        re.IGNORECASE | re.MULTILINE,
+    )
+
+@lru_cache(maxsize=None)
+def _get_clean_factor_pattern() -> re.Pattern:
+    """Get clean factor pattern with lazy compilation for performance optimization."""
+    return re.compile(r"[()=\*]+", re.IGNORECASE)
+
+# Backward compatibility aliases (deprecated - use _get_*_pattern() functions instead)
+# These maintain compatibility while new code should use the getter functions
+FACTOR_PATTERN = None  # Will be replaced by lazy-loaded pattern when accessed
+COMMENT_PATTERN = None
+EVIDENCE_PATTERN = None
+COMBINATION_PATTERN = None
+CLEAN_FACTOR_PATTERN = None
 
 _function_source_cache: weakref.WeakKeyDictionary[Callable, str] = weakref.WeakKeyDictionary()
 
@@ -312,27 +342,27 @@ def _extract_confidence_factors(source_code: str, docstring: str) -> List[str]:
     """
     confidence_factors = []
 
-    # Pattern 1: Extract confidence factor variable names using pre-compiled pattern
-    factor_matches = FACTOR_PATTERN.findall(source_code)
+    # Pattern 1: Extract confidence factor variable names using lazy-loaded pattern
+    factor_matches = _get_factor_pattern().findall(source_code)
     if factor_matches:
         confidence_factors.extend(
             [factor.replace("_", " ") for factor in factor_matches[:3]]
         )
 
-    # Pattern 2: Extract meaningful descriptive comments using pre-compiled pattern
-    comment_matches = COMMENT_PATTERN.findall(source_code)
+    # Pattern 2: Extract meaningful descriptive comments using lazy-loaded pattern
+    comment_matches = _get_comment_pattern().findall(source_code)
     if comment_matches:
         confidence_factors.extend(
             [match.strip().lower() for match in comment_matches[:2]]
         )
 
-    # Pattern 3: Extract from evidence strings with confidence calculations using pre-compiled pattern
-    evidence_matches = EVIDENCE_PATTERN.findall(source_code)
+    # Pattern 3: Extract from evidence strings with confidence calculations using lazy-loaded pattern
+    evidence_matches = _get_evidence_pattern().findall(source_code)
     if evidence_matches:
         confidence_factors.extend([match.strip() for match in evidence_matches[:1]])
 
-    # Pattern 4: Look for factor multiplication combinations using pre-compiled pattern
-    combination_matches = COMBINATION_PATTERN.findall(source_code)
+    # Pattern 4: Look for factor multiplication combinations using lazy-loaded pattern
+    combination_matches = _get_combination_pattern().findall(source_code)
     if combination_matches and not confidence_factors:
         # If we haven't found factors yet, use the combination pattern
         factor_names = []
@@ -370,8 +400,8 @@ def _clean_confidence_factors(confidence_factors: List[str]) -> List[str]:
     seen = set()
     for factor in confidence_factors:
         clean_factor = factor.strip().lower()
-        # Remove common code artifacts using pre-compiled pattern
-        clean_factor = CLEAN_FACTOR_PATTERN.sub("", clean_factor).strip()
+        # Remove common code artifacts using lazy-loaded pattern
+        clean_factor = _get_clean_factor_pattern().sub("", clean_factor).strip()
         if clean_factor and clean_factor not in seen and len(clean_factor) > 2:
             clean_factors.append(clean_factor)
             seen.add(clean_factor)
