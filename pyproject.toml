@@ -140,6 +140,8 @@ ignore_missing_imports = true
 
 [dependency-groups]
 dev = [
+    "pytest>=8.4.2",
+    "pytest-cov>=7.0.0",
     "safety>=3.6.1",
     "twine>=6.2.0",
 ]
