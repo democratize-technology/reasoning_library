@@ -221,10 +221,16 @@ def _extract_keywords(text: str) -> List[str]:
         - Limits input length to prevent DoS attacks
         - Pre-compiled regex patterns for performance
         - Strict keyword extraction limits
+
+    Raises:
+        ValidationError: If text is None
     """
-    # SECURITY: Input validation and length limits
+    # SECURITY: Input validation to prevent None crashes
+    if text is None:
+        raise ValidationError("text cannot be None for keyword extraction")
+
     if not isinstance(text, str):
-        return []
+        raise ValidationError(f"text must be a string, got {type(text).__name__}")
 
     # Strict input length limit to prevent DoS
     if len(text) > 5000:  # Conservative limit
@@ -842,6 +848,10 @@ def generate_hypotheses(
     Returns:
         List[Dict]: List of generated hypotheses with confidence scores and metadata
     """
+    # Explicit None validation to ensure ValidationError is raised
+    if observations is None:
+        raise ValidationError("observations cannot be None")
+
     # Validate complex parameter types
     try:
         validated_observations = validate_string_list(
@@ -980,6 +990,10 @@ def rank_hypotheses(
         >>> all(0.0 <= h["confidence"] <= 1.0 for h in result)
         True
     """
+    # Explicit None validation to ensure ValidationError is raised
+    if hypotheses is None:
+        raise ValidationError("hypotheses cannot be None")
+
     # Validate complex parameter types
     try:
         validated_hypotheses = validate_hypotheses_list(

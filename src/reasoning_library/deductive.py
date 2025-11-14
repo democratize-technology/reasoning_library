@@ -167,7 +167,6 @@ def check_modus_ponens_premises_with_confidence(p: bool, q: bool) -> Tuple[bool,
     confidence_factors=["premise_truth_value"],
 )
 @curry
-@with_null_safety(expected_return_type=Optional[bool])
 
 def apply_modus_ponens(
     p_is_true: bool,
@@ -185,8 +184,23 @@ def apply_modus_ponens(
 
     Returns:
         Optional[bool]: The conclusion (True) if deduced, otherwise None.
+
+    Raises:
+        ValidationError: If p_is_true or p_implies_q_is_true is None
     """
-    conclusion = init_optional_bool()
+    # Explicit None validation to ensure ValidationError is raised
+    if p_is_true is None:
+        raise ValidationError("p_is_true cannot be None")
+    if p_implies_q_is_true is None:
+        raise ValidationError("p_implies_q_is_true cannot be None")
+
+    # Validate that inputs are boolean
+    if not isinstance(p_is_true, bool):
+        raise ValidationError(f"p_is_true must be a boolean, got {type(p_is_true).__name__}")
+    if not isinstance(p_implies_q_is_true, bool):
+        raise ValidationError(f"p_implies_q_is_true must be a boolean, got {type(p_implies_q_is_true).__name__}")
+
+    conclusion = None
     description = (
         f"Attempting Modus Ponens with P={p_is_true} and "
         f"(P -> Q)={p_implies_q_is_true}."
@@ -231,7 +245,22 @@ def chain_deductions(
     Composes multiple deductive functions into a single chain, adding steps to
     the provided ReasoningChain.
     Each function in the chain takes the output of the previous one as input.
+
+    Raises:
+        ValidationError: If reasoning_chain is None or any function is None
     """
+    # Input validation to prevent None crashes
+    if reasoning_chain is None:
+        raise ValidationError("reasoning_chain cannot be None")
+
+    if not functions:
+        raise ValidationError("At least one function must be provided")
+
+    for i, func in enumerate(functions):
+        if func is None:
+            raise ValidationError(f"Function at position {i} cannot be None")
+        if not callable(func):
+            raise ValidationError(f"Function at position {i} must be callable")
 
     def composed_function(initial_input: Any) -> Any:
         result = initial_input

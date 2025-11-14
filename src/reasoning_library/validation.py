@@ -192,6 +192,10 @@ def validate_hypothesis_dict(
     Raises:
         ValidationError: If validation fails
     """
+    if hypothesis is None:
+        prefix = f"{field_name}[{index}]" if index is not None else field_name
+        raise ValidationError(f"{prefix} cannot be None")
+
     prefix = f"{field_name}[{index}]" if index is not None else field_name
 
     def validate_confidence_with_index(confidence: Union[int, float, str, None]) -> float:

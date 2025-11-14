@@ -393,7 +393,20 @@ def _calculate_arithmetic_confidence(
 
     Returns:
         float: Adjusted confidence score (0.0 - 1.0)
+
+    Raises:
+        ValidationError: If inputs are None or invalid
     """
+    # Input validation to prevent None crashes
+    if differences is None:
+        raise ValidationError("differences array cannot be None")
+
+    if sequence_length is None:
+        raise ValidationError("sequence_length cannot be None")
+
+    if base_confidence is None:
+        raise ValidationError("base_confidence cannot be None")
+
     data_sufficiency_factor = _assess_data_sufficiency(sequence_length, "arithmetic")
 
     pattern_quality_factor = _calculate_pattern_quality_score_optimized(differences,
@@ -424,7 +437,20 @@ def _calculate_geometric_confidence(
 
     Returns:
         float: Adjusted confidence score (0.0 - 1.0)
+
+    Raises:
+        ValidationError: If inputs are None or invalid
     """
+    # Input validation to prevent None crashes
+    if ratios is None:
+        raise ValidationError("ratios list cannot be None")
+
+    if sequence_length is None:
+        raise ValidationError("sequence_length cannot be None")
+
+    if base_confidence is None:
+        raise ValidationError("base_confidence cannot be None")
+
     data_sufficiency_factor = _assess_data_sufficiency(sequence_length, "geometric")
 
     pattern_quality_factor = _calculate_pattern_quality_score_optimized(ratios,
@@ -452,7 +478,11 @@ def _validate_basic_sequence_input(sequence: List[float]) -> None:
     Raises:
         ValidationError: If sequence is invalid
     """
+    # Check type first for backward compatibility with existing tests
     if not isinstance(sequence, (list, tuple, np.ndarray)):
+        # Special case for None to provide clearer error but maintain compatibility
+        if sequence is None:
+            raise ValidationError("Expected list/tuple/array for sequence, got NoneType")
         raise ValidationError(
             f"Expected list/tuple/array for sequence, got {type(sequence).__name__}"
         )
