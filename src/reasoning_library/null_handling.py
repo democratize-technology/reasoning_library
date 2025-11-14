@@ -8,6 +8,7 @@ and ensures consistent handling of None, empty strings, and empty collections.
 from typing import Any, List, Dict, Optional, Callable, TypeVar, Union, cast
 from functools import wraps
 import logging
+import re
 
 # Type variables for generic functions
 T = TypeVar('T')
@@ -20,6 +21,52 @@ NO_VALUE = None
 EMPTY_STRING = ""
 EMPTY_LIST: List[Any] = []
 EMPTY_DICT: Dict[str, Any] = {}
+
+
+def _sanitize_exception_message(func_name: str, exception_type: str, exception_msg: str) -> str:
+    """
+    Create a secure exception log message without sensitive system information.
+
+    SECURITY NOTE: This function removes potentially sensitive information from
+    exception messages while preserving useful debugging information for developers.
+
+    Args:
+        func_name: Name of the function where the exception occurred
+        exception_type: Type of exception (e.g., 'KeyError', 'ValueError')
+        exception_msg: Original exception message
+
+    Returns:
+        Sanitized exception message safe for logging in production
+    """
+    # Remove file paths that might leak system architecture
+    sanitized_msg = exception_msg
+
+    # Remove user directory paths first (before file path replacement)
+    sanitized_msg = re.sub(r'/Users/[^/\s]+', '[USER_DIR]', sanitized_msg)
+    sanitized_msg = re.sub(r'/home/[^/\s]+', '[USER_DIR]', sanitized_msg)
+
+    # Remove absolute paths (Unix and Windows)
+    sanitized_msg = re.sub(r'/[a-zA-Z0-9_/-]+\.(py|js|txt|json)', '[FILE]', sanitized_msg)
+    sanitized_msg = re.sub(r'[A-Za-z]:\\[a-zA-Z0-9_/-\\]+\.[a-zA-Z]+', '[FILE]', sanitized_msg)
+
+    # Remove IP addresses and network information
+    sanitized_msg = re.sub(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', '[IP]', sanitized_msg)
+
+    # Remove potential passwords, tokens, or API keys
+    sanitized_msg = re.sub(r'[\'\"]?(?:password|token|key|secret)[\'\"]?\s*[:=]\s*[\'\"]?[^\s\'\"]{8,}[\'\"]?', '[REDACTED]', sanitized_msg, flags=re.IGNORECASE)
+
+    # Remove overly long messages that might contain sensitive data
+    if len(sanitized_msg) > 200:
+        sanitized_msg = sanitized_msg[:200] + '... [TRUNCATED]'
+
+    # Remove newlines and control characters
+    sanitized_msg = re.sub(r'[\r\n\t]', ' ', sanitized_msg)
+
+    # Construct the secure message
+    if sanitized_msg.strip():
+        return f"{func_name}: {exception_type}: {sanitized_msg}"
+    else:
+        return f"{func_name}: {exception_type}"
 
 
 def safe_none_coalesce(
@@ -218,11 +265,11 @@ def with_null_safety(expected_return_type: type = Any) -> Callable[[Callable[...
                 result = func(*args, **kwargs)
                 return normalize_none_return(result, expected_return_type)
             except (ValueError, TypeError, AttributeError, KeyError) as e:
-                # Log business logic exceptions for debugging
-                logger.debug(
-                    f"Business exception caught in {func.__name__}: {type(e).__name__}: {e}",
-                    exc_info=True
-                )
+                # SECURE LOGGING: Only log sanitized exception information
+                # SECURITY FIX: Removed exc_info=True to prevent information disclosure
+                # of stack traces, file paths, and system architecture details
+                safe_message = _sanitize_exception_message(func.__name__, type(e).__name__, str(e))
+                logger.debug(f"Business exception handled: {safe_message}")
                 # Return appropriate empty value based on expected type
                 if expected_return_type == bool:
                     return NO_VALUE

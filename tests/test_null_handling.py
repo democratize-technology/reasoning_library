@@ -470,10 +470,31 @@ class TestDangerousExceptionHandling:
             runtime_error_func()
 
     def test_logging_for_caught_business_exceptions(self):
-        """Test that business exceptions are properly logged."""
-        # Set up a logger to capture log messages
-        with pytest.raises(AssertionError):  # This will fail until we implement the test
-            pass  # Placeholder for logging test implementation
+        """Test that business exceptions are securely handled without information disclosure."""
+        from reasoning_library.null_handling import _sanitize_exception_message
+
+        # Test the sanitization function directly
+        safe_msg = _sanitize_exception_message("test_func", "KeyError", "'missing_key'")
+
+        # Verify useful information is preserved
+        assert "test_func" in safe_msg
+        assert "KeyError" in safe_msg
+        assert "missing_key" in safe_msg
+
+        # Test that sensitive paths are removed
+        path_msg = _sanitize_exception_message("load_config", "FileNotFoundError", "/Users/john/secrets.txt")
+        assert "/Users/john" not in path_msg
+        assert "[USER_DIR]" in path_msg or "[FILE]" in path_msg
+
+        # Test exception handling behavior
+        @with_null_safety(expected_return_type=str)
+        def test_function():
+            raise KeyError("test_key_error")
+
+        result = test_function()
+
+        # Verify function returns appropriate empty value
+        assert result == ""  # EMPTY_STRING for str return type
 
     def test_debug_logging_format(self):
         """Test that debug logging contains appropriate information."""
