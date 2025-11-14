@@ -10,6 +10,13 @@ from functools import wraps
 import logging
 import re
 
+# ARCH-ID003-001: Import SecureLogger for mandatory logging sanitization
+try:
+    from .sanitization import SecureLogger
+except ImportError:
+    # Fallback for when sanitization module is not available
+    SecureLogger = None
+
 # Type variables for generic functions
 T = TypeVar('T')
 U = TypeVar('U')
@@ -269,7 +276,13 @@ def with_null_safety(expected_return_type: type = Any) -> Callable[[Callable[...
                 # SECURITY FIX: Removed exc_info=True to prevent information disclosure
                 # of stack traces, file paths, and system architecture details
                 safe_message = _sanitize_exception_message(func.__name__, type(e).__name__, str(e))
-                logger.debug(f"Business exception handled: {safe_message}")
+                # ARCH-ID003-001: Use SecureLogger for mandatory sanitization
+                if SecureLogger:
+                    secure_logger = SecureLogger('null_handling')
+                    secure_logger.debug(f"Business exception handled: {safe_message}")
+                else:
+                    # Fallback to standard logging
+                    logger.debug(f"Business exception handled: {safe_message}")
                 # Return appropriate empty value based on expected type
                 if expected_return_type == bool:
                     return NO_VALUE

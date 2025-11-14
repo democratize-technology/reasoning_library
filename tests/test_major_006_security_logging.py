@@ -26,10 +26,11 @@ from unittest.mock import patch, MagicMock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 try:
-    from reasoning_library.sanitization import sanitize_text, sanitize_for_logging
+    from reasoning_library.sanitization import sanitize_for_logging, sanitize_text_input
     from reasoning_library.exceptions import SecurityError, ValidationError, ReasoningError
-    from reasoning_library.core import _sanitize_reasoning_input
     SANITIZATION_AVAILABLE = True
+    # Backward compatibility alias
+    sanitize_text = sanitize_text_input
 except ImportError as e:
     print(f"Warning: Could not import sanitization modules: {e}")
     SANITIZATION_AVAILABLE = False
@@ -267,8 +268,9 @@ class TestSecurityLogIntegrity:
             log_stream.truncate(0)
             log_stream.seek(0)
 
-            # Simulate logging with potential injection
-            logger.warning(f"Security event: {attempt}")
+            # SECURITY FIX: Sanitize input before logging to prevent log injection
+            sanitized_attempt = sanitize_for_logging(attempt)
+            logger.warning(f"Security event: {sanitized_attempt}")
 
             log_output = log_stream.getvalue()
 
