@@ -653,8 +653,10 @@ def _generate_domain_template_hypotheses(
     if len(all_text) > DOMAIN_DETECTION_LIMIT:  # 50KB limit for domain detection
         all_text = all_text[:DOMAIN_DETECTION_LIMIT]
 
+    # SAFE: Use .get() with defaults to prevent KeyError if 'keywords' key is missing
     for domain_name, domain_info in DOMAIN_TEMPLATES.items():
-        if any(keyword in all_text for keyword in domain_info["keywords"]):
+        keywords = domain_info.get("keywords", [])
+        if any(keyword in all_text for keyword in keywords):
             domain = domain_name
             break
 
@@ -667,19 +669,22 @@ def _generate_domain_template_hypotheses(
     for idx, template in enumerate(
         DOMAIN_TEMPLATES[domain]["templates"][:max_hypotheses]
     ):
+        # SAFE: Use .get() with defaults to prevent KeyError if keys are missing
+        actions_list = keywords.get("actions", [])
+        components_list = keywords.get("components", [])
+        issues_list = keywords.get("issues", [])
+
         # Select best keywords for this template
-        action = (
-            keywords["actions"][0] if keywords["actions"] else "recent change"
-        )
+        action = actions_list[0] if actions_list else "recent change"
         component = (
-            keywords["components"][
-                min(idx, len(keywords["components"]) - 1)
-            ] if keywords["components"] else "system"
+            components_list[
+                min(idx, len(components_list) - 1)
+            ] if components_list else "system"
         )
         issue = (
-            keywords["issues"][
-                min(idx, len(keywords["issues"]) - 1)
-            ] if keywords["issues"] else "performance issue"
+            issues_list[
+                min(idx, len(issues_list) - 1)
+            ] if issues_list else "performance issue"
         )
 
         # SECURITY: Apply length limits IMMEDIATELY after keyword extraction
@@ -922,8 +927,8 @@ def generate_hypotheses(
     systemic = _generate_systemic_hypothesis(observations_count)
     hypotheses.append(systemic)
 
-    # Sort hypotheses by confidence and limit to max_hypotheses
-    hypotheses.sort(key=lambda x: x["confidence"], reverse=True)
+    # SAFE: Sort hypotheses by confidence with fallback to prevent KeyError
+    hypotheses.sort(key=lambda x: x.get("confidence", 0.0), reverse=True)
     hypotheses = hypotheses[:max_hypotheses]
 
     if reasoning_chain:
@@ -931,7 +936,7 @@ def generate_hypotheses(
             stage=stage,
             description=description,
             result=hypotheses,
-            confidence=max([h["confidence"] for h in hypotheses]) if hypotheses else 0.0,
+            confidence=max([h.get("confidence", 0.0) for h in hypotheses]) if hypotheses else 0.0,
             evidence=f"Generated {len(hypotheses)} hypotheses from {len(observations)} observations",
             assumptions=[
                 "Observations are accurate and relevant",
@@ -1041,7 +1046,12 @@ def rank_hypotheses(
         for evidence in validated_evidence:
             # Simple evidence matching based on keyword overlap
             evidence_keywords = set(_extract_keywords(evidence))
-            hypothesis_keywords = set(_extract_keywords(hypothesis["hypothesis"]))
+            # SAFE: Use .get() with default to prevent KeyError if 'hypothesis' key is missing
+            hypothesis_text = hypothesis.get("hypothesis", "")
+            if not hypothesis_text:
+                # Skip evidence matching for hypotheses without text
+                continue
+            hypothesis_keywords = set(_extract_keywords(hypothesis_text))
 
             # Calculate overlap
             overlap = len(evidence_keywords & hypothesis_keywords)
@@ -1064,23 +1074,28 @@ def rank_hypotheses(
             updated_hypothesis["supporting_evidence"] = []
         updated_hypothesis["supporting_evidence"].extend(new_evidence)
 
-        # Update hypothesis description if strong evidence
-        if avg_evidence_support > EVIDENCE_SUPPORT_HIGH_THRESHOLD:
-            updated_hypothesis["hypothesis"] += " (strongly supported by new evidence)"
-        elif avg_evidence_support > EVIDENCE_SUPPORT_MODERATE_THRESHOLD:
-            updated_hypothesis["hypothesis"] += " (supported by new evidence)"
+        # SAFE: Update hypothesis description if strong evidence - check if hypothesis key exists first
+        hypothesis_text = updated_hypothesis.get("hypothesis", "")
+        if hypothesis_text:  # Only update if hypothesis text exists
+            if avg_evidence_support > EVIDENCE_SUPPORT_HIGH_THRESHOLD:
+                updated_hypothesis["hypothesis"] += " (strongly supported by new evidence)"
+            elif avg_evidence_support > EVIDENCE_SUPPORT_MODERATE_THRESHOLD:
+                updated_hypothesis["hypothesis"] += " (supported by new evidence)"
+        else:
+            # If hypothesis doesn't exist, create a default one
+            updated_hypothesis["hypothesis"] = "Hypothesis updated with new evidence"
 
         updated_hypotheses.append(updated_hypothesis)
 
-    # Re - sort by updated confidence
-    updated_hypotheses.sort(key=lambda x: x["confidence"], reverse=True)
+    # SAFE: Re-sort by updated confidence with fallback to prevent KeyError
+    updated_hypotheses.sort(key=lambda x: x.get("confidence", 0.0), reverse=True)
 
     if reasoning_chain:
         reasoning_chain.add_step(
             stage = stage,
             description = description,
             result = updated_hypotheses,
-            confidence = max([h["confidence"] for h in updated_hypotheses]) if updated_hypotheses else 0.0,
+            confidence = max([h.get("confidence", 0.0) for h in updated_hypotheses]) if updated_hypotheses else 0.0,
             evidence = f"Hypotheses re - ranked based on {len(new_evidence)} pieces of new evidence",
             assumptions=[
                 "New evidence is accurate and relevant",
@@ -1141,15 +1156,15 @@ def evaluate_best_explanation(
     stage = "Abductive Reasoning: Best Explanation Selection"
     description = f"Evaluating {len(validated_hypotheses)} hypotheses to select best explanation"
 
-    # Select the hypothesis with highest confidence
-    best_hypothesis = max(validated_hypotheses, key=lambda x: x["confidence"])
+    # SAFE: Select the hypothesis with highest confidence using .get() to prevent KeyError
+    best_hypothesis = max(validated_hypotheses, key=lambda x: x.get("confidence", 0.0))
 
     # Add evaluation metadata
     best_hypothesis["evaluation"] = {
         "total_hypotheses": len(validated_hypotheses),
         "rank": 1,
         "selected_as_best": True,
-        "selection_reason": f"Highest confidence score ({best_hypothesis['confidence']:.3f})"
+        "selection_reason": f"Highest confidence score ({best_hypothesis.get('confidence', 0.0):.3f})"
     }
 
     if reasoning_chain:
@@ -1157,7 +1172,7 @@ def evaluate_best_explanation(
             stage = stage,
             description = description,
             result = best_hypothesis,
-            confidence = best_hypothesis["confidence"],
+            confidence = best_hypothesis.get("confidence", 0.0),
             evidence = f"Selected from {len(hypotheses)} hypotheses based on confidence score",
             assumptions=[
                 "Higher confidence indicates better explanation",
