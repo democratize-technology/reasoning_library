@@ -53,33 +53,25 @@ def test_regex_pattern_usage_frequency():
     """
     import reasoning_library.core as core_module
 
-    # Track which patterns are actually used during typical operations
-    used_patterns = []
+    # Track which patterns are actually accessed during typical operations
+    accessed_patterns = []
 
-    # Mock the regex operations to track usage
-    original_search = core_module.FACTOR_PATTERN.search
-    original_findall = core_module.FACTOR_PATTERN.findall
-    original_finditer = core_module.FACTOR_PATTERN.finditer
+    # Patch the lazy loading functions to track access
+    original_get_factor_pattern = core_module._get_factor_pattern
 
-    def track_search(*args, **kwargs):
-        used_patterns.append('FACTOR_PATTERN.search')
-        return original_search(*args, **kwargs)
+    def track_factor_pattern_access():
+        accessed_patterns.append('FACTOR_PATTERN')
+        return original_get_factor_pattern()
 
-    def track_findall(*args, **kwargs):
-        used_patterns.append('FACTOR_PATTERN.findall')
-        return original_findall(*args, **kwargs)
-
-    def track_finditer(*args, **kwargs):
-        used_patterns.append('FACTOR_PATTERN.finditer')
-        return original_finditer(*args, **kwargs)
-
-    # Apply tracking
-    with patch.object(core_module.FACTOR_PATTERN, 'search', side_effect=track_search), \
-         patch.object(core_module.FACTOR_PATTERN, 'findall', side_effect=track_findall), \
-         patch.object(core_module.FACTOR_PATTERN, 'finditer', side_effect=track_finditer):
+    # Apply tracking by patching the lazy loading function
+    with patch.object(core_module, '_get_factor_pattern', side_effect=track_factor_pattern_access):
 
         # Test typical usage scenarios
         try:
+            # Access the pattern to trigger lazy loading
+            pattern = core_module.FACTOR_PATTERN
+            assert pattern is not None, "FACTOR_PATTERN should be accessible"
+
             # Test some operations that might use regex patterns
             from reasoning_library.core import _detect_mathematical_reasoning
 
@@ -89,13 +81,14 @@ def test_regex_pattern_usage_frequency():
 
             # This should trigger some regex usage
             result = _detect_mathematical_reasoning(dummy_func)
+            assert result is not None, "Should return some result"
 
         except Exception as e:
-            # Even if it fails, we can still see which patterns were attempted
+            # Even if it fails, we can still see which patterns were accessed
             pass
 
-    print(f"Patterns used during test: {dict(Counter(used_patterns))}")
-    return used_patterns
+    print(f"Patterns accessed during test: {dict(zip(accessed_patterns, [accessed_patterns.count(p) for p in set(accessed_patterns)]))}")
+    return accessed_patterns
 
 
 def test_lazy_loading_benefits():

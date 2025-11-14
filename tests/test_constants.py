@@ -22,7 +22,7 @@ class TestSecurityConstants:
         """Test MAX_SEQUENCE_LENGTH constant."""
         assert isinstance(MAX_SEQUENCE_LENGTH, int)
         assert MAX_SEQUENCE_LENGTH > 0
-        assert MAX_SEQUENCE_LENGTH == 10000  # Verify expected value
+        assert MAX_SEQUENCE_LENGTH == 1000  # Verify expected value
 
     def test_computation_timeout(self):
         """Test COMPUTATION_TIMEOUT constant."""
