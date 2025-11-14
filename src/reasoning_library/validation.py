@@ -524,6 +524,11 @@ def validate_numeric_value(value: Any, param_name: str = "value", allow_float: b
     if value is None:
         raise ValidationError(f"{param_name} cannot be None")
 
+    # ID-006: Explicitly exclude boolean values to prevent type coercion
+    # In Python, bool is a subclass of int, so isinstance(True, int) returns True
+    if isinstance(value, bool):
+        raise ValidationError(f"{param_name} cannot be boolean, got {type(value).__name__}")
+
     if not isinstance(value, (int, float, np.integer, np.floating)):
         raise ValidationError(f"{param_name} must be numeric, got {type(value).__name__}")
 
@@ -637,18 +642,15 @@ def safe_divide(numerator: Any, denominator: Any, param_name: str = "result", de
     Raises:
         ValidationError: If inputs are invalid numeric types
     """
-    try:
-        num = validate_numeric_value(numerator, f"{param_name}_numerator")
-        den = validate_numeric_value(denominator, f"{param_name}_denominator")
+    # ID-006: Perform strict type validation and don't silently accept invalid types
+    num = validate_numeric_value(numerator, f"{param_name}_numerator")
+    den = validate_numeric_value(denominator, f"{param_name}_denominator")
 
-        if abs(den) < 1e-10:  # Check for near-zero denominator
-            return default_value
-
-        return num / den
-
-    except (ValidationError, TypeError, ValueError):
-        # If validation fails, return default value
+    # Check for zero or near-zero denominator and return default value only in this case
+    if abs(den) < 1e-10:  # Check for near-zero denominator
         return default_value
+
+    return num / den
 
 
 def safe_array_operation(operation_func: callable, array: Any, *args, **kwargs) -> np.ndarray:

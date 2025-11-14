@@ -168,16 +168,18 @@ class TestSafeArithmeticOperations:
 
     def test_safe_divide_invalid_inputs(self):
         """Test safe division with invalid inputs."""
+        # ID-006: After fixing type coercion, safe_divide should raise ValidationError for invalid inputs
         test_cases = [
             (None, 2),
             ("not_a_number", 2),
             (10, None),
             (10, "not_a_number"),
+            (True, False),  # Boolean values should not be accepted as numbers
         ]
 
         for num, den in test_cases:
-            result = safe_divide(num, den, default_value=88.0)
-            assert result == 88.0  # Should return default on validation failure
+            with pytest.raises(ValidationError):
+                safe_divide(num, den, default_value=88.0)
 
     def test_safe_array_operation_valid(self):
         """Test safe array operations with valid inputs."""
