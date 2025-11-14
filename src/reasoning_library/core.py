@@ -6,6 +6,7 @@ import inspect
 import re
 import threading
 import weakref
+from collections import deque
 from dataclasses import dataclass, field
 from functools import wraps, lru_cache
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -74,13 +75,8 @@ def _get_clean_factor_pattern() -> re.Pattern:
     """Get clean factor pattern with lazy compilation for performance optimization."""
     return re.compile(r"[()=\*]+", re.IGNORECASE)
 
-# Backward compatibility aliases (deprecated - use _get_*_pattern() functions instead)
-# These maintain compatibility while new code should use the getter functions
-FACTOR_PATTERN = None  # Will be replaced by lazy-loaded pattern when accessed
-COMMENT_PATTERN = None
-EVIDENCE_PATTERN = None
-COMBINATION_PATTERN = None
-CLEAN_FACTOR_PATTERN = None
+# Note: Regex patterns are now lazily loaded through module-level __getattr__ function
+# This provides backward compatibility while enabling lazy compilation for performance
 
 _function_source_cache: weakref.WeakKeyDictionary[Callable, str] = weakref.WeakKeyDictionary()
 
@@ -95,6 +91,12 @@ _cache_lock = threading.RLock()
 
 # Race condition fix: Add timeout handling for locks
 _LOCK_TIMEOUT = 5.0  # 5 second timeout for lock acquisition
+
+# PERFORMANCE OPTIMIZATION: FIFO tracking deques for O(1) cache/registry management
+# These maintain insertion order for efficient FIFO eviction without expensive operations
+_math_cache_queue = deque(maxlen=MAX_CACHE_SIZE)
+_enhanced_registry_queue = deque(maxlen=MAX_REGISTRY_SIZE)
+_tool_registry_queue = deque(maxlen=MAX_REGISTRY_SIZE)
 
 def _get_function_source_cached(func: Callable[..., Any]) -> str:
     """
@@ -201,23 +203,18 @@ def _get_math_detection_cached(func: Callable[..., Any]) -> Tuple[bool, Optional
             num_to_evict = min(num_to_evict, current_size)
 
             if num_to_evict > 0:
-                # RACE CONDITION FIX: Additional safety check to prevent corruption
+                # PERFORMANCE OPTIMIZATION: O(1) FIFO eviction using deque
                 try:
-                    # ATOMIC eviction using deterministic ordering and single operation
-                    # Convert to list to avoid modification during iteration issues
-                    current_keys = list(_math_detection_cache.keys())
-                    keys_to_evict = set(current_keys[:num_to_evict])
+                    # Evict oldest entries efficiently without expensive dictionary operations
+                    keys_to_evict = []
+                    for _ in range(num_to_evict):
+                        if _math_cache_queue:
+                            old_key = _math_cache_queue.popleft()
+                            keys_to_evict.append(old_key)
 
-                    # Create new cache dictionary with survivors only
-                    # This is fully atomic - no intermediate inconsistent state
-                    new_cache = {
-                        key: value for key, value in _math_detection_cache.items()
-                        if key not in keys_to_evict
-                    }
-
-                    # Atomic replacement: single operation to update cache
-                    _math_detection_cache.clear()
-                    _math_detection_cache.update(new_cache)
+                    # Remove evicted keys from cache (batch operation)
+                    for key in keys_to_evict:
+                        _math_detection_cache.pop(key, None)  # safe removal with default
                 except (RuntimeError, ValueError, KeyError) as e:
                     # If eviction fails due to concurrent modification, continue with degraded performance
                     # This prevents crashes while maintaining functionality
@@ -227,8 +224,10 @@ def _get_math_detection_cached(func: Callable[..., Any]) -> Tuple[bool, Optional
         if result is None or not isinstance(result, tuple) or len(result) != 3:
             result = (False, None, None)
 
-        # ATOMIC cache update: Single operation to add new entry
+        # PERFORMANCE OPTIMIZATION: Atomic cache and queue update
         _math_detection_cache[func_id] = result
+        # Track insertion order for FIFO eviction (O(1) operation)
+        _math_cache_queue.append(func_id)
         return result
 
     finally:
@@ -276,11 +275,15 @@ def _manage_registry_size() -> None:
 
             if remove_count > 0:
                 try:
-                    # ATOMIC slice operation: Create new list with remaining items
-                    # This eliminates race condition window during slice assignment
-                    surviving_items = ENHANCED_TOOL_REGISTRY[remove_count:]
+                    # PERFORMANCE OPTIMIZATION: O(1) registry eviction using deque
+                    # Evict oldest items efficiently without expensive list operations
+                    for _ in range(remove_count):
+                        if _enhanced_registry_queue:
+                            _enhanced_registry_queue.popleft()
+
+                    # Rebuild registry from deque (O(n) operation, but only during eviction)
                     ENHANCED_TOOL_REGISTRY.clear()
-                    ENHANCED_TOOL_REGISTRY.extend(surviving_items)
+                    ENHANCED_TOOL_REGISTRY.extend(_enhanced_registry_queue)
                 except (IndexError, ValueError, RuntimeError):
                     # Handle race conditions gracefully - skip eviction if list is modified
                     pass
@@ -293,10 +296,15 @@ def _manage_registry_size() -> None:
 
             if remove_count > 0:
                 try:
-                    # ATOMIC slice operation: Create new list with remaining items
-                    surviving_items = TOOL_REGISTRY[remove_count:]
+                    # PERFORMANCE OPTIMIZATION: O(1) registry eviction using deque
+                    # Evict oldest items efficiently without expensive list operations
+                    for _ in range(remove_count):
+                        if _tool_registry_queue:
+                            _tool_registry_queue.popleft()
+
+                    # Rebuild registry from deque (O(n) operation, but only during eviction)
                     TOOL_REGISTRY.clear()
-                    TOOL_REGISTRY.extend(surviving_items)
+                    TOOL_REGISTRY.extend(_tool_registry_queue)
                 except (IndexError, ValueError, RuntimeError):
                     # Handle race conditions gracefully - skip eviction if list is modified
                     pass
@@ -1282,12 +1290,14 @@ def tool_spec(
 
         # Thread - safe atomic registry updates with size management
         with _registry_lock:
-            ENHANCED_TOOL_REGISTRY.append(
-                {"function": wrapper, "tool_spec": tool_specification, "metadata": metadata}
-            )
+            # PERFORMANCE OPTIMIZATION: Update enhanced registry and tracking queue
+            registry_entry = {"function": wrapper, "tool_spec": tool_specification, "metadata": metadata}
+            ENHANCED_TOOL_REGISTRY.append(registry_entry)
+            _enhanced_registry_queue.append(registry_entry)
 
             setattr(wrapper, "tool_spec", tool_specification)
             TOOL_REGISTRY.append(wrapper)
+            _tool_registry_queue.append(wrapper)
 
             # Manage registry size AFTER adding entries to prevent race conditions
             _manage_registry_size()
@@ -1297,3 +1307,41 @@ def tool_spec(
     if func:
         return decorator(func)
     return decorator
+
+
+def __getattr__(name: str) -> re.Pattern:
+    """
+    Module-level lazy loading for regex patterns with backward compatibility.
+
+    Provides backward compatibility for FACTOR_PATTERN, COMMENT_PATTERN, etc.
+    while enabling lazy compilation for performance optimization.
+
+    This function is called when accessing attributes that don't exist on the module.
+    It enables lazy loading of regex patterns while maintaining the expected API.
+
+    Args:
+        name: Attribute name being accessed
+
+    Returns:
+        Compiled regex pattern for backward compatibility
+
+    Raises:
+        AttributeError: If name is not a recognized lazy-loaded pattern
+
+    Examples:
+        >>> import reasoning_library.core as core
+        >>> pattern = core.FACTOR_PATTERN  # Triggers lazy compilation
+        >>> isinstance(pattern, re.Pattern)  # True
+    """
+    pattern_getters = {
+        'FACTOR_PATTERN': _get_factor_pattern,
+        'COMMENT_PATTERN': _get_comment_pattern,
+        'EVIDENCE_PATTERN': _get_evidence_pattern,
+        'COMBINATION_PATTERN': _get_combination_pattern,
+        'CLEAN_FACTOR_PATTERN': _get_clean_factor_pattern,
+    }
+
+    if name in pattern_getters:
+        return pattern_getters[name]()
+
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
