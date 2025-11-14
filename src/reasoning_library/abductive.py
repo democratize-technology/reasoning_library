@@ -522,8 +522,8 @@ def _safe_hypothesis_template(action: str, component: str, issue: str, template_
     """
     CRITICAL SECURITY: Safe hypothesis generation without template injection vulnerability.
 
-    Replaces vulnerable template.format() calls with secure string concatenation.
-    This function completely eliminates template injection attack vectors.
+    SECURE IMPLEMENTATION: Uses context-aware tokenization that eliminates cross-contamination
+    while preserving the original template functionality.
 
     Args:
         action: Sanitized action description
@@ -534,35 +534,88 @@ def _safe_hypothesis_template(action: str, component: str, issue: str, template_
     Returns:
         str: Safe hypothesis text with no template injection vulnerability
 
-    Security:
-        - NEVER uses template.format() or similar vulnerable operations
-        - Uses only safe string concatenation and replacement
-        - All inputs are pre-sanitized
-        - No code execution possible
+    Security Features:
+        - CONTEXT-AWARE PARSING: Only processes template placeholders, not user input
+        - NO CROSS-CONTAMINATION: User inputs with placeholder patterns treated as literal text
+        - SECURE TOKENIZATION: Distinguishes template syntax from literal text
+        - DEFENSE IN DEPTH: Multiple layers of input validation and sanitization
+        - BACKWARD COMPATIBLE: Preserves original template behavior for legitimate use
     """
-    # Double-sanitize all inputs for defense in depth
-    safe_action = _sanitize_input_for_concatenation(action)
-    safe_component = _sanitize_input_for_concatenation(component)
-    safe_issue = _sanitize_input_for_concatenation(issue)
+    # SECURITY: Validate all inputs
+    if not isinstance(action, str):
+        action = str(action) if action is not None else ""
+    if not isinstance(component, str):
+        component = str(component) if component is not None else ""
+    if not isinstance(issue, str):
+        issue = str(issue) if issue is not None else ""
+    if not isinstance(template_pattern, str):
+        template_pattern = "The {action} on {component} causes {issue}"
 
-    # Safe string replacement - NEVER use template.format()
-    # Replace placeholders manually to prevent injection
-    result = template_pattern.replace("{action}", safe_action)
-    result = result.replace("{component}", safe_component)
-    result = result.replace("{issue}", safe_issue)
+    # CRITICAL SECURITY FIX: Sanitize inputs BEFORE any processing
+    # This ensures dangerous patterns are removed before template processing
+    safe_action = sanitize_for_concatenation(action, max_length=50)
+    safe_component = sanitize_for_concatenation(component, max_length=50)
+    safe_issue = sanitize_for_concatenation(issue, max_length=100)
 
-    # Final safety check - ensure no dangerous patterns remain
-    dangerous_patterns = ['{', '}', '$', '__', 'import', 'system', 'exec', 'eval']
+    # SECURITY: Use context-aware template processing that prevents cross-contamination
+    # The key insight: only replace placeholders that existed in the ORIGINAL template
+    # Do NOT process placeholder patterns that come from user input
+
+    # Find placeholder positions in the ORIGINAL template before any processing
+    import re
+
+    # Store original template
+    original_template = template_pattern
+
+    # Create a list of all placeholder positions in the original template
+    placeholder_positions = []
+    for match in re.finditer(r'\{(action|component|issue)\}', original_template):
+        placeholder_positions.append((match.start(), match.end(), match.group(1)))
+
+    # SECURITY: Build result by processing template segments
+    # This approach completely eliminates cross-contamination
+    result_parts = []
+    last_end = 0
+
+    for start, end, placeholder_type in placeholder_positions:
+        # Add literal text segment (unprocessed)
+        if start > last_end:
+            result_parts.append(original_template[last_end:start])
+
+        # Add the appropriate safe value for this placeholder
+        if placeholder_type == 'action':
+            result_parts.append(safe_action)
+        elif placeholder_type == 'component':
+            result_parts.append(safe_component)
+        elif placeholder_type == 'issue':
+            result_parts.append(safe_issue)
+
+        last_end = end
+
+    # Add any remaining literal text
+    if last_end < len(original_template):
+        result_parts.append(original_template[last_end:])
+
+    # Combine all parts
+    result = ''.join(result_parts)
+
+    # SECURITY: Final validation to ensure no dangerous patterns
+    dangerous_patterns = [
+        '__import__', 'system(', 'exec(', 'eval(', 'subprocess',
+        'popen', 'getattr', 'setattr', '__class__', '__base__',
+        '__subclasses__', '${', '%(', '{{', '}}'
+    ]
+
     for pattern in dangerous_patterns:
         if pattern in result:
             # Emergency fallback - remove dangerous content
-            result = re.sub(pattern, '', result, flags=re.IGNORECASE)
+            result = result.replace(pattern, '')
 
     # Ensure result is not empty and properly formatted
     if not result.strip():
         result = f"Unknown issue affecting {safe_component or 'system'}"
 
-    # Capitalize first letter
+    # Capitalize first letter for proper formatting
     if result and result[0].islower():
         result = result[0].upper() + result[1:]
 
