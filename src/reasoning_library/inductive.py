@@ -148,6 +148,9 @@ def _detect_exponential_growth_sequence(sequence: List[float], function_name: st
 
         # If we have enough growth ratios and they show exponential pattern
         if len(growth_ratios) >= EXPONENTIAL_GROWTH_WINDOW - 1:
+            # Protect against division by zero in case growth_ratios is empty (shouldn't happen with above check)
+            if len(growth_ratios) == 0:
+                continue  # Skip this window if no valid growth ratios
             avg_growth = sum(growth_ratios) / len(growth_ratios)
 
             # Check if average growth exceeds exponential threshold
@@ -200,6 +203,10 @@ def _assess_data_sufficiency(sequence_length: int, pattern_type: str) -> float:
         minimum_required = DATA_SUFFICIENCY_MINIMUM_GEOMETRIC
     else:
         minimum_required = DATA_SUFFICIENCY_MINIMUM_DEFAULT  # Default conservative minimum
+
+    # Protect against division by zero (shouldn't happen with current constants, but added for robustness)
+    if minimum_required <= 0:
+        minimum_required = 1.0  # Fallback to prevent division by zero
 
     return min(1.0, sequence_length / minimum_required)
 
@@ -778,6 +785,11 @@ def _calculate_recursive_confidence(
     """
     # Data sufficiency factor - recursive patterns need more data
     minimum_required = DATA_SUFFICIENCY_MINIMUM_RECURSIVE  # Need at least 5 terms for reliable recursive detection
+
+    # Protect against division by zero
+    if minimum_required <= 0:
+        minimum_required = 1.0  # Fallback to prevent division by zero
+
     data_sufficiency_factor = min(1.0, sequence_length / minimum_required)
 
     pattern_quality_factor = match_score
@@ -813,13 +825,23 @@ def _calculate_polynomial_confidence(
         float: Adjusted confidence score (0.0 - 1.0)
     """
     minimum_required = degree + DATA_SUFFICIENCY_MINIMUM_POLYNOMIAL  # Need at least degree + 3 points for reliable fit
+
+    # Protect against division by zero in data_sufficiency_factor
+    if minimum_required <= 0:
+        minimum_required = 1.0  # Fallback to prevent division by zero
+
     data_sufficiency_factor = min(1.0, sequence_length / minimum_required)
 
     # Pattern quality factor - based on R - squared
     pattern_quality_factor = r_squared
 
     # Complexity factor - higher degree polynomials are more complex
-    complexity_factor = 1.0 / (1.0 + COMPLEXITY_SCORE_POLYNOMIAL_DEGREE_FACTOR * degree)
+    # Protect against division by zero in complexity_factor (degree could be negative in edge cases)
+    complexity_denominator = 1.0 + COMPLEXITY_SCORE_POLYNOMIAL_DEGREE_FACTOR * degree
+    if complexity_denominator <= 0:
+        complexity_denominator = 1.0  # Fallback to prevent division by zero
+
+    complexity_factor = 1.0 / complexity_denominator
 
     confidence = (
         base_confidence
@@ -1257,8 +1279,16 @@ def detect_exponential_pattern(sequence: List[float],
     # Check how well the exponential model fits
     if np.allclose(y_values, predicted_values, rtol = rtol, atol = atol):
         # Calculate confidence based on fit quality
-        relative_error = np.mean(np.abs((y_values - predicted_values) / y_values))
-        match_score = max(0.0, 1.0 - relative_error / rtol)
+        # Protect against division by zero in y_values
+        y_values_abs = np.abs(y_values)
+        # Use small epsilon to prevent division by zero
+        safe_y_values = np.where(y_values_abs < NUMERICAL_STABILITY_THRESHOLD,
+                                NUMERICAL_STABILITY_THRESHOLD, y_values_abs)
+        relative_error = np.mean(np.abs((y_values - predicted_values) / safe_y_values))
+
+        # Protect against division by zero in rtol
+        safe_rtol = max(rtol, NUMERICAL_STABILITY_THRESHOLD)
+        match_score = max(0.0, 1.0 - relative_error / safe_rtol)
 
         # Predict next term
         next_x = len(sequence)
@@ -1332,7 +1362,13 @@ def detect_custom_step_patterns(sequence: List[float]) -> List[Dict[str, Any]]:
 
     # Check for modulo patterns (sequences that repeat with a period)
     if len(sequence) >= 6:
-        for period in range(2, min(len(sequence) // 2, 6)):  # Check periods up to 5
+        # Ensure we have valid range for period detection
+        max_period = max(2, min(len(sequence) // 2, 6))  # At least 2
+        for period in range(2, max_period + 1):  # Check periods up to 5
+            # Additional safety check
+            if period <= 0:
+                continue
+
             if len(sequence) % period == 0 or len(sequence) >= period * 2:
                 # Check if the sequence repeats with this period
                 pattern = sequence[:period]
