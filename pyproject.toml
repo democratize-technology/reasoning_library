@@ -84,6 +84,7 @@ markers = [
     "timing: Marks tests specifically for timing attack prevention",
     "memory: Marks tests specifically for memory safety and leak detection",
     "concurrency: Marks tests specifically for thread safety and concurrent access",
+    "asyncio: Marks tests as async tests that require pytest-asyncio",
 ]
 
 [tool.coverage.run]
