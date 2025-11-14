@@ -87,7 +87,11 @@ jobs:
                 with open('pip-audit-report.json') as f:
                     data = json.load(f)
                     print(len(data.get('vulnerabilities', [])))
-            except:
+            except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as e:
+                print(f\"Error parsing pip-audit report: {type(e).__name__}: {e}\", file=__import__('sys').stderr)
+                print(0)
+            except (FileNotFoundError, PermissionError) as e:
+                print(f\"Error accessing pip-audit report: {type(e).__name__}: {e}\", file=__import__('sys').stderr)
                 print(0)
             ")
             echo "Found $VULN_COUNT vulnerabilities" >> $GITHUB_STEP_SUMMARY
@@ -116,7 +120,11 @@ jobs:
                     high_count = sum(1 for vuln in data.get('vulnerabilities', [])
                                    if vuln.get('severity', '').lower() in ['high', 'critical'])
                     print(high_count)
-            except:
+            except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as e:
+                print(f\"Error parsing safety report: {type(e).__name__}: {e}\", file=__import__('sys').stderr)
+                print(0)
+            except (FileNotFoundError, PermissionError) as e:
+                print(f\"Error accessing safety report: {type(e).__name__}: {e}\", file=__import__('sys').stderr)
                 print(0)
             ")
 
@@ -191,7 +199,11 @@ jobs:
                                    if result.get('issue_confidence', '').lower() == 'high'
                                    and result.get('issue_severity', '').lower() in ['medium', 'high'])
                     print(high_count)
-            except:
+            except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as e:
+                print(f\"Error parsing bandit report: {type(e).__name__}: {e}\", file=__import__('sys').stderr)
+                print(0)
+            except (FileNotFoundError, PermissionError) as e:
+                print(f\"Error accessing bandit report: {type(e).__name__}: {e}\", file=__import__('sys').stderr)
                 print(0)
             ")
             echo "High confidence security issues: $HIGH_CONFIDENCE" >> $GITHUB_STEP_SUMMARY
@@ -206,7 +218,11 @@ jobs:
                 with open('semgrep-report.json') as f:
                     data = json.load(f)
                     print(len(data.get('results', [])))
-            except:
+            except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as e:
+                print(f\"Error parsing semgrep report: {type(e).__name__}: {e}\", file=__import__('sys').stderr)
+                print(0)
+            except (FileNotFoundError, PermissionError) as e:
+                print(f\"Error accessing semgrep report: {type(e).__name__}: {e}\", file=__import__('sys').stderr)
                 print(0)
             ")
             echo "Semgrep security findings: $SEMGREP_ISSUES" >> $GITHUB_STEP_SUMMARY
@@ -279,7 +295,11 @@ jobs:
                                   if any(risk in pkg.get('License', '').upper()
                                         for risk in risky))
                   print(risky_count)
-          except:
+          except (json.JSONDecodeError, KeyError, TypeError, AttributeError) as e:
+              print(f\"Error parsing license report: {type(e).__name__}: {e}\", file=__import__('sys').stderr)
+              print(0)
+          except (FileNotFoundError, PermissionError) as e:
+              print(f\"Error accessing license report: {type(e).__name__}: {e}\", file=__import__('sys').stderr)
               print(0)
           ")
 
