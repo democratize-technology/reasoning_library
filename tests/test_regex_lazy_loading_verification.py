@@ -178,16 +178,17 @@ def test_backward_compatibility():
     """
     import reasoning_library.core as core_module
 
-    # These should exist but be None (backward compatibility)
+    # These should exist and be immediately accessible (backward compatibility with __getattr__)
     assert hasattr(core_module, 'FACTOR_PATTERN'), "FACTOR_PATTERN should exist for compatibility"
     assert hasattr(core_module, 'COMMENT_PATTERN'), "COMMENT_PATTERN should exist for compatibility"
     assert hasattr(core_module, 'EVIDENCE_PATTERN'), "EVIDENCE_PATTERN should exist for compatibility"
     assert hasattr(core_module, 'COMBINATION_PATTERN'), "COMBINATION_PATTERN should exist for compatibility"
     assert hasattr(core_module, 'CLEAN_FACTOR_PATTERN'), "CLEAN_FACTOR_PATTERN should exist for compatibility"
 
-    # They should be None (not compiled at import time)
-    assert core_module.FACTOR_PATTERN is None, "FACTOR_PATTERN should be None until accessed"
-    assert core_module.COMMENT_PATTERN is None, "COMMENT_PATTERN should be None until accessed"
+    # They should be re.Pattern objects (lazily compiled on first access via __getattr__)
+    import re
+    assert isinstance(core_module.FACTOR_PATTERN, re.Pattern), "FACTOR_PATTERN should be re.Pattern object"
+    assert isinstance(core_module.COMMENT_PATTERN, re.Pattern), "COMMENT_PATTERN should be re.Pattern object"
 
 
 if __name__ == "__main__":

@@ -41,7 +41,51 @@ class TestExceptionHierarchy:
         details = {"context": "test", "code": 123}
         error = ReasoningError("Test message", details)
         assert error.details == details
-        assert "Details:" in str(error)
+
+        # CRITICAL SECURITY FIX: Details should NOT be exposed in __str__
+        # Only safe metadata should be exposed, not sensitive data
+        assert "Details:" not in str(error)
+        assert "context:" not in str(error)  # Not in safe keys, should not be exposed
+
+        # But debug info should still work when explicitly requested
+        debug_info = error.get_debug_info(include_sensitive=True)
+        assert "Details:" in debug_info
+
+    def test_secure_metadata_exposure(self):
+        """Test that only safe metadata is exposed in string representation."""
+        # Test safe metadata exposure
+        safe_details = {"error_code": 400, "validation_type": "input_check", "operation": "auth"}
+        error = ReasoningError("Validation failed", safe_details)
+
+        error_str = str(error)
+        assert "error_code: 400" in error_str
+        assert "validation_type: input_check" in error_str
+        assert "operation: auth" in error_str
+        assert "Details:" not in error_str
+
+        # Test sensitive data protection
+        sensitive_details = {
+            "api_key": "secret_123",
+            "password": "pass_456",
+            "error_code": 500  # This should still be exposed
+        }
+        error_sensitive = ReasoningError("Security error", sensitive_details)
+
+        error_sensitive_str = str(error_sensitive)
+        assert "api_key" not in error_sensitive_str
+        assert "secret_123" not in error_sensitive_str
+        assert "password" not in error_sensitive_str
+        assert "pass_456" not in error_sensitive_str
+        assert "error_code: 500" in error_sensitive_str  # Safe data still exposed
+
+        # Test debug functionality
+        debug_info = error_sensitive.get_debug_info(include_sensitive=True)
+        assert "secret_123" in debug_info
+        assert "pass_456" in debug_info
+
+        safe_debug_info = error_sensitive.get_debug_info(include_sensitive=False)
+        assert "secret_123" not in safe_debug_info
+        assert "pass_456" not in safe_debug_info
 
     def test_exception_inheritance(self):
         """Test that all custom exceptions inherit from ReasoningError."""
