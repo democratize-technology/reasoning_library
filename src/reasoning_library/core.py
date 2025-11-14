@@ -130,7 +130,8 @@ def _get_math_detection_cached(func: Callable[...,
     Implements LRU - style eviction to prevent unbounded cache growth.
 
     Thread - safe: Uses _cache_lock to prevent race conditions in cache access
-    and eviction logic that could cause data corruption.
+    and eviction logic that could cause data corruption. All expensive operations
+    are performed under lock to eliminate race conditions.
 
     Args:
         func: Function to analyze for mathematical reasoning
@@ -161,42 +162,58 @@ def _get_math_detection_cached(func: Callable[...,
         # Specific exceptions: import errors, type errors, value errors, attribute access errors
         func_id = str(id(func))
 
-    # Perform expensive detection first to minimize lock contention
-    # This is safe because we check cache under lock afterward
-    result = _detect_mathematical_reasoning_uncached(func)
-
-    # Single lock acquisition for all cache operations to eliminate race conditions
+    # CRITICAL FIX: Acquire lock FIRST to eliminate race conditions
+    # This ensures only one thread performs expensive detection and cache update
     with _cache_lock:
-        # Check if another thread already cached this result while we were detecting
-        if (func_id in _math_detection_cache and
-                _math_detection_cache[func_id] is not None):
-            return _math_detection_cache[func_id]
+        # ATOMIC cache check: Check if result already cached (prevents duplicate work)
+        if func_id in _math_detection_cache:
+            cached_result = _math_detection_cache[func_id]
+            if cached_result is not None:
+                return cached_result
 
-        # ATOMIC cache eviction: check if eviction is needed before adding new entry
-        if len(_math_detection_cache) >= MAX_CACHE_SIZE:
-            # Calculate how many entries to evict atomically
-            num_to_evict = int(MAX_CACHE_SIZE * CACHE_EVICTION_FRACTION)
+        # ATOMIC expensive operation: Perform detection under lock to prevent
+        # multiple threads from doing expensive work simultaneously
+        result = _detect_mathematical_reasoning_uncached(func)
+
+        # Double-check cache after expensive operation (another thread might
+        # have cached result while we were detecting, though this is impossible
+        # with our lock-first approach)
+        if func_id in _math_detection_cache:
+            cached_result = _math_detection_cache[func_id]
+            if cached_result is not None:
+                return cached_result
+
+        # ATOMIC cache eviction: Check and perform eviction atomically
+        current_size = len(_math_detection_cache)
+        if current_size >= MAX_CACHE_SIZE:
+            # Calculate eviction size based on current cache state
+            num_to_evict = max(1, int(MAX_CACHE_SIZE * CACHE_EVICTION_FRACTION))
+
+            # Ensure we don't evict more than we have
+            num_to_evict = min(num_to_evict, current_size)
+
             if num_to_evict > 0:
-                # Get keys to evict (deterministic order)
-                keys_to_evict = set(list(_math_detection_cache.keys())[:num_to_evict])
+                # ATOMIC eviction using deterministic ordering and single operation
+                # Convert to list to avoid modification during iteration issues
+                current_keys = list(_math_detection_cache.keys())
+                keys_to_evict = set(current_keys[:num_to_evict])
 
-                # ATOMIC eviction: remove all keys at once using dictionary.clear() and update
-                # This eliminates the race condition window between individual pop operations
-                # Store current cache entries
-                surviving_entries = {
+                # Create new cache dictionary with survivors only
+                # This is fully atomic - no intermediate inconsistent state
+                new_cache = {
                     key: value for key, value in _math_detection_cache.items()
                     if key not in keys_to_evict
                 }
 
-                # Clear and rebuild cache atomically
+                # Atomic replacement: single operation to update cache
                 _math_detection_cache.clear()
-                _math_detection_cache.update(surviving_entries)
+                _math_detection_cache.update(new_cache)
 
         # Validate and normalize result before caching
         if result is None or not isinstance(result, tuple) or len(result) != 3:
             result = (False, None, None)
 
-        # ATOMIC cache update: single operation to add the new entry
+        # ATOMIC cache update: Single operation to add new entry
         _math_detection_cache[func_id] = result
         return result
 
@@ -208,24 +225,43 @@ def _manage_registry_size() -> None:
     to maintain bounded memory usage. Only performs expensive operations when
     actually exceeding limits to maintain O(1) performance for normal use.
 
-    Thread - safe: Uses _registry_lock to prevent race conditions.
+    Thread - safe: Uses _registry_lock to prevent race conditions and ensures
+    atomic list operations to eliminate race condition windows.
     """
     with _registry_lock:
         # Early exit if both registries are under limit (O(1) performance)
-        if (len(ENHANCED_TOOL_REGISTRY) < MAX_REGISTRY_SIZE and
-            len(TOOL_REGISTRY) < MAX_REGISTRY_SIZE):
+        enhanced_current_size = len(ENHANCED_TOOL_REGISTRY)
+        tool_current_size = len(TOOL_REGISTRY)
+
+        if (enhanced_current_size < MAX_REGISTRY_SIZE and
+            tool_current_size < MAX_REGISTRY_SIZE):
             return
 
-        # Only if exceeding limit, then do expensive eviction operations
-        if len(ENHANCED_TOOL_REGISTRY) >= MAX_REGISTRY_SIZE:
-            # Remove oldest percentage of entries (FIFO eviction)
-            remove_count = int(MAX_REGISTRY_SIZE * REGISTRY_EVICTION_FRACTION)
-            ENHANCED_TOOL_REGISTRY[:] = ENHANCED_TOOL_REGISTRY[remove_count:]
+        # ATOMIC registry eviction: Perform all operations atomically
+        # Enhanced Tool Registry eviction
+        if enhanced_current_size >= MAX_REGISTRY_SIZE:
+            # Calculate safe removal count
+            remove_count = max(1, int(MAX_REGISTRY_SIZE * REGISTRY_EVICTION_FRACTION))
+            remove_count = min(remove_count, enhanced_current_size)
 
-        if len(TOOL_REGISTRY) >= MAX_REGISTRY_SIZE:
-            # Remove oldest percentage of entries (FIFO eviction)
-            remove_count = int(MAX_REGISTRY_SIZE * REGISTRY_EVICTION_FRACTION)
-            TOOL_REGISTRY[:] = TOOL_REGISTRY[remove_count:]
+            if remove_count > 0:
+                # ATOMIC slice operation: Create new list with remaining items
+                # This eliminates race condition window during slice assignment
+                surviving_items = ENHANCED_TOOL_REGISTRY[remove_count:]
+                ENHANCED_TOOL_REGISTRY.clear()
+                ENHANCED_TOOL_REGISTRY.extend(surviving_items)
+
+        # Tool Registry eviction
+        if tool_current_size >= MAX_REGISTRY_SIZE:
+            # Calculate safe removal count
+            remove_count = max(1, int(MAX_REGISTRY_SIZE * REGISTRY_EVICTION_FRACTION))
+            remove_count = min(remove_count, tool_current_size)
+
+            if remove_count > 0:
+                # ATOMIC slice operation: Create new list with remaining items
+                surviving_items = TOOL_REGISTRY[remove_count:]
+                TOOL_REGISTRY.clear()
+                TOOL_REGISTRY.extend(surviving_items)
 
 
 def clear_performance_caches() -> Dict[str, int]:
