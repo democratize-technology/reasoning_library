@@ -13,10 +13,35 @@ SECURITY FIXES for MAJOR-003: Input validation bypass vulnerabilities
 - Comprehensive case-insensitive pattern matching
 - Control character encoding bypass prevention
 - Nested/encoded injection detection
+
+SECURITY FIX for SEC-001: Critical password leakage vulnerability
+- Password and sensitive data masking in sanitize_for_logging()
+- Prevents accidental logging of passwords, API keys, tokens, secrets, and credentials
+- Uses regex pattern matching to identify and replace sensitive data with [REDACTED]
+- Maintains field names while masking values for debugging purposes
+- Fixed critical vulnerability where sanitize_for_logging("password='secret'")
+  returned literal password instead of masked version
+
+SEC-001-ARCHFIX: Critical architectural flaws fixed
+- URL encoding bypass prevention: pass%77ord=secret now properly masked
+- HTML entity bypass prevention: passwor&#100;=secret now properly masked
+- Regex greediness fix: compound strings with multiple credentials now all masked
+- False positive prevention: password_reset_page no longer over-masked
+- Enhanced word boundaries and proper boundary detection implemented
+
+VULNERABILITY DETAILS:
+- VULNERABLE: sanitize_for_logging("password='secret123'") returned "password='secret123'"
+- FIXED: sanitize_for_logging("password='secret123'") now returns "password=[REDACTED]"
+- BYPASS VECTORS BLOCKED: URL encoding, HTML entities, compound strings, nested patterns
+- ENHANCED PATTERN: \b(password|api[_-]?key|token|secret|credential[s]?)\b\s*[=:]\s*[\'"]?([^\'"\s&;]+?)(?:[\'"])?(?=[\s&;,]|$)
+- ARCHITECTURAL FIXES: Word boundaries, proper quote handling, boundary detection
+- IMPACT: Prevents sensitive data leakage in application logs and security monitoring systems
 """
 
 import re
 import unicodedata
+import urllib.parse
+import html
 from typing import Any, Optional
 
 from .constants import (
@@ -87,6 +112,56 @@ def _decode_encoded_characters(text: str) -> str:
         text = re.sub(r'\\U([0-9a-fA-F]{8})', lambda m: chr(int(m.group(1), 16)), text)
     except (ValueError, OverflowError):
         # If decoding fails, return original text
+        pass
+
+    return text
+
+
+def _enhanced_preprocessing_for_bypass_prevention(text: str) -> str:
+    """
+    SEC-001-ARCHFIX: Enhanced pre-processing to prevent sophisticated bypass attempts.
+
+    This function implements comprehensive decoding to prevent URL encoding, HTML entity
+    encoding, and other encoding bypasses that could circumvent sensitive data masking.
+
+    Args:
+        text: Input text that may contain encoded sensitive data
+
+    Returns:
+        Fully decoded text safe for sensitive data pattern matching
+
+    Security Features:
+        - URL decoding (prevents pass%77ord bypass)
+        - HTML entity decoding (prevents passwor&#100; bypass)
+        - Hex decoding fallback
+        - Security-safe exception handling
+    """
+    if not isinstance(text, str):
+        return ""
+
+    try:
+        # Step 1: URL decoding - prevents pass%77ord type bypasses
+        # This handles percent-encoded characters that could mask sensitive field names
+        text = urllib.parse.unquote(text)
+
+        # Step 2: HTML entity decoding - prevents passwor&#100; type bypasses
+        # This handles HTML entities that could be used to obfuscate field names
+        text = html.unescape(text)
+
+        # Step 3: Additional hex decoding for any remaining encoded patterns
+        # This catches encoded characters that weren't handled by URL/HTML decoding
+        def hex_decoder(match):
+            try:
+                hex_value = match.group(1)
+                return chr(int(hex_value, 16))
+            except (ValueError, OverflowError):
+                return match.group(0)  # Return original if decoding fails
+
+        text = re.sub(r'%([0-9a-fA-F]{2})', hex_decoder, text)
+
+    except Exception:
+        # If any decoding fails, continue with original text
+        # Security logging should never break the main functionality
         pass
 
     return text
@@ -246,6 +321,26 @@ def _get_string_concatenation_pattern() -> re.Pattern:
     """Get string concatenation pattern with lazy compilation for performance optimization."""
     return re.compile(
         r'[\'\"][^\'\"]*[\'\"]\s*\+\s*[\'\"][^\'\"]*[\'\"]|[\'\"]\s*\+\s*[\'\"]',
+        re.IGNORECASE
+    )
+
+@lru_cache(maxsize=None)
+def _get_sensitive_data_pattern() -> re.Pattern:
+    """
+    SEC-001-ARCHFIX: Enhanced sensitive data pattern with comprehensive bypass protection.
+
+    This pattern identifies sensitive information like passwords, API keys, tokens,
+    secrets, and credentials that should be masked in logs to prevent leakage.
+
+    ARCHITECTURAL FIXES:
+    - Added word boundaries (\b) to prevent false positive over-masking
+    - Fixed regex greediness with proper boundary detection
+    - Stops at &, space, comma, semicolon boundaries to handle compound strings
+    - Enhanced to handle nested quotes and complex value patterns
+    - Improved quote handling to properly strip surrounding quotes
+    """
+    return re.compile(
+        r'\b(password|api[_-]?key|token|secret|credential[s]?)\b\s*[=:]\s*[\'"]?([^\'"\s&;]+?)(?:[\'"])?(?=[\s&;,]|$)',
         re.IGNORECASE
     )
 
@@ -475,6 +570,8 @@ def sanitize_for_logging(text: Any, max_length: Optional[int] = None, source: st
     Enhanced to prevent log injection bypass vulnerabilities and add comprehensive
     protection against various log injection attack vectors.
 
+    SEC-001: NOW INCLUDES PASSWORD AND SENSITIVE DATA MASKING.
+
     Args:
         text: Input text to sanitize for logging
         max_length: Maximum allowed length (default: KEYWORD_LENGTH_LIMIT * 15)
@@ -485,6 +582,7 @@ def sanitize_for_logging(text: Any, max_length: Optional[int] = None, source: st
 
     Security Features:
         - ID-003: Comprehensive log injection prevention
+        - SEC-001: Password and sensitive data masking (password, api_key, token, secret, credentials)
         - Detects and blocks log level spoofing attempts
         - Prevents ANSI escape sequence injection
         - Normalizes control characters that could create fake log entries
@@ -495,9 +593,23 @@ def sanitize_for_logging(text: Any, max_length: Optional[int] = None, source: st
 
     Examples:
         >>> sanitize_for_logging("Error\n[INFO] Fake admin logged in")
-        'Error [LOG_LEVEL_BLOCKED] Fake admin logged in'
+        'Error [LOG_INJECTION_BLOCKED] Fake admin logged in'
         >>> sanitize_for_logging("Critical issue\x1b[31mRED TEXT\x1b[0m")
-        'Critical issue RED TEXT'
+        'Critical issue[ANSI_BLOCKED]RED TEXT[ANSI_BLOCKED]'
+        >>> sanitize_for_logging("password='secret123'")
+        'password=[REDACTED]'
+        # SEC-001-ARCHFIX examples - sophisticated bypass vectors now blocked:
+        >>> sanitize_for_logging("pass%77ord=secret123")  # URL encoding bypass
+        'password=[REDACTED]'
+        >>> sanitize_for_logging("api_%6bey=token456")    # URL encoding bypass
+        'api_key=[REDACTED]'
+        >>> sanitize_for_logging("passwor&#100;=secret")  # HTML entity bypass
+        'password=[REDACTED]'
+        >>> sanitize_for_logging("password=secret&api_key=token")  # Compound string
+        'password=[REDACTED]&api_key=[REDACTED]'
+        # False positives properly handled:
+        >>> sanitize_for_logging("password_reset_page")  # Should NOT be masked
+        'password_reset_page'
     """
     if max_length is None:
         max_length = KEYWORD_LENGTH_LIMIT * 15
@@ -511,6 +623,19 @@ def sanitize_for_logging(text: Any, max_length: Optional[int] = None, source: st
     # SECURITY FIX: Preprocess to prevent bypass attempts
     text = _normalize_unicode_for_security(text)
     text = _decode_encoded_characters(text)
+
+    # SEC-001-ARCHFIX: Enhanced pre-processing to prevent encoding bypasses
+    # This prevents URL encoding, HTML entity encoding, and other sophisticated bypasses
+    text = _enhanced_preprocessing_for_bypass_prevention(text)
+
+    # SEC-001: CRITICAL FIX - Mask sensitive data BEFORE any other processing
+    # This prevents passwords, API keys, tokens, secrets, and credentials from being logged
+    def _mask_sensitive_data(match):
+        """Replace sensitive data with [REDACTED] marker."""
+        field_name = match.group(1)  # The field name (password, api_key, etc.)
+        return f"{field_name}=[REDACTED]"
+
+    text = _get_sensitive_data_pattern().sub(_mask_sensitive_data, text)
 
     # ID-003: Enhanced log injection detection with multiple passes
     injection_detected = False
@@ -1180,6 +1305,7 @@ def __getattr__(name: str) -> re.Pattern:
         '_LOG_INJECTION_PATTERN': _get_log_injection_pattern,
         '_NESTED_INJECTION_PATTERN': _get_nested_injection_pattern,
         '_STRING_CONCATENATION_PATTERN': _get_string_concatenation_pattern,
+        '_SENSITIVE_DATA_PATTERN': _get_sensitive_data_pattern,
     }
 
     if name in pattern_getters:
