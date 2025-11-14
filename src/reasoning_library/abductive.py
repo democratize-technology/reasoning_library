@@ -14,7 +14,14 @@ from collections import defaultdict
 from .core import ReasoningChain, curry, tool_spec
 from .exceptions import ValidationError
 
-from .validation import validate_string_list, validate_hypotheses_list
+from .validation import (
+    validate_string_list,
+    validate_hypotheses_list,
+    validate_numeric_value,
+    validate_confidence_range,
+    validate_positive_numeric,
+    validate_arithmetic_operation
+)
 from .sanitization import (
     sanitize_for_concatenation,
     _sanitize_input_for_concatenation,
@@ -190,6 +197,11 @@ def _calculate_hypothesis_confidence(
     Returns:
         float: Confidence score (0.0 - 1.0)
     """
+    # Type validation for arithmetic operations
+    base_confidence = validate_confidence_range(base_confidence, "base_confidence")
+    total_observations = validate_numeric_value(total_observations, "total_observations", allow_float=False)
+    explained_observations = validate_numeric_value(explained_observations, "explained_observations", allow_float=False)
+    assumption_count = validate_positive_numeric(assumption_count, "assumption_count")
     coverage_factor = (
         explained_observations / total_observations
         if total_observations > 0 else CONFIDENCE_MIN

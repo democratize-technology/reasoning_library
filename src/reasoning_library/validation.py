@@ -6,7 +6,10 @@ used in public APIs, ensuring robust input validation and preventing
 type-related security vulnerabilities.
 """
 
+import inspect
 from typing import Any, Callable, Dict, List, Optional, Union, TypedDict
+
+import numpy as np
 
 # For Python < 3.11 compatibility, we'll use total=False to make fields optional
 # instead of using NotRequired
@@ -453,6 +456,304 @@ def validate_parameters(**validators) -> Callable[[Callable[..., Any]], Callable
 
             # Call function with validated arguments
             return func(*bound_args.args, **bound_args.kwargs)
+
+        return wrapper
+    return decorator
+
+
+# ===== TYPE VALIDATION FOR ARITHMETIC OPERATIONS =====
+
+def validate_numeric_sequence(sequence: Any, param_name: str = "sequence") -> np.ndarray:
+    """
+    Validate that input is a numeric sequence suitable for arithmetic operations.
+
+    Args:
+        sequence: Input sequence to validate
+        param_name: Name of the parameter for error messages
+
+    Returns:
+        np.ndarray: Validated numeric array
+
+    Raises:
+        ValidationError: If sequence is invalid
+    """
+    if sequence is None:
+        raise ValidationError(f"{param_name} cannot be None")
+
+    # Convert to numpy array for type checking
+    try:
+        if isinstance(sequence, (list, tuple)):
+            array = np.array(sequence, dtype=float)
+        elif isinstance(sequence, np.ndarray):
+            array = sequence.astype(float, copy=False)
+        else:
+            raise ValidationError(f"{param_name} must be a list, tuple, or numpy array, got {type(sequence).__name__}")
+
+    except (ValueError, TypeError) as e:
+        raise ValidationError(f"{param_name} contains non-numeric values: {str(e)}")
+
+    # Check for NaN or infinite values
+    if np.any(np.isnan(array)):
+        raise ValidationError(f"{param_name} cannot contain NaN values")
+
+    if np.any(np.isinf(array)):
+        raise ValidationError(f"{param_name} cannot contain infinite values")
+
+    if len(array) == 0:
+        raise ValidationError(f"{param_name} cannot be empty")
+
+    return array
+
+
+def validate_numeric_value(value: Any, param_name: str = "value", allow_float: bool = True, allow_int: bool = True) -> float:
+    """
+    Validate that input is a numeric value suitable for arithmetic operations.
+
+    Args:
+        value: Input value to validate
+        param_name: Name of the parameter for error messages
+        allow_float: Whether to allow float values
+        allow_int: Whether to allow int values
+
+    Returns:
+        float: Validated numeric value
+
+    Raises:
+        ValidationError: If value is invalid
+    """
+    if value is None:
+        raise ValidationError(f"{param_name} cannot be None")
+
+    if not isinstance(value, (int, float, np.integer, np.floating)):
+        raise ValidationError(f"{param_name} must be numeric, got {type(value).__name__}")
+
+    # Check type constraints
+    if isinstance(value, float) and not allow_float:
+        raise ValidationError(f"{param_name} cannot be a float")
+
+    if isinstance(value, int) and not allow_int:
+        raise ValidationError(f"{param_name} cannot be an integer")
+
+    # Convert to float and check for special values
+    float_value = float(value)
+
+    if np.isnan(float_value):
+        raise ValidationError(f"{param_name} cannot be NaN")
+
+    if np.isinf(float_value):
+        raise ValidationError(f"{param_name} cannot be infinite")
+
+    return float_value
+
+
+def validate_positive_numeric(value: Any, param_name: str = "value") -> float:
+    """
+    Validate that input is a positive numeric value.
+
+    Args:
+        value: Input value to validate
+        param_name: Name of the parameter for error messages
+
+    Returns:
+        float: Validated positive numeric value
+
+    Raises:
+        ValidationError: If value is invalid or not positive
+    """
+    validated_value = validate_numeric_value(value, param_name)
+
+    if validated_value <= 0:
+        raise ValidationError(f"{param_name} must be positive, got {validated_value}")
+
+    return validated_value
+
+
+def validate_confidence_range(confidence: Any, param_name: str = "confidence") -> float:
+    """
+    Validate that input is a confidence value in range [0.0, 1.0].
+
+    Args:
+        confidence: Input confidence to validate
+        param_name: Name of the parameter for error messages
+
+    Returns:
+        float: Validated confidence value
+
+    Raises:
+        ValidationError: If confidence is invalid or out of range
+    """
+    validated_value = validate_numeric_value(confidence, param_name)
+
+    if not (0.0 <= validated_value <= 1.0):
+        raise ValidationError(f"{param_name} must be between 0.0 and 1.0, got {validated_value}")
+
+    return validated_value
+
+
+def validate_sequence_length(length: Any, param_name: str = "length") -> int:
+    """
+    Validate that input is a valid sequence length (positive integer).
+
+    Args:
+        length: Input length to validate
+        param_name: Name of the parameter for error messages
+
+    Returns:
+        int: Validated length
+
+    Raises:
+        ValidationError: If length is invalid
+    """
+    if length is None:
+        raise ValidationError(f"{param_name} cannot be None")
+
+    if not isinstance(length, (int, np.integer)):
+        raise ValidationError(f"{param_name} must be an integer, got {type(length).__name__}")
+
+    int_length = int(length)
+
+    if int_length <= 0:
+        raise ValidationError(f"{param_name} must be positive, got {int_length}")
+
+    if int_length > 1000000:  # Reasonable upper limit to prevent DoS
+        raise ValidationError(f"{param_name} is too large: {int_length}. Maximum allowed: 1000000")
+
+    return int_length
+
+
+def safe_divide(numerator: Any, denominator: Any, param_name: str = "result", default_value: float = 0.0) -> float:
+    """
+    Safely perform division with type validation and zero-division protection.
+
+    Args:
+        numerator: Numerator value
+        denominator: Denominator value
+        param_name: Name of the parameter for error messages
+        default_value: Value to return if denominator is zero
+
+    Returns:
+        float: Result of division or default_value
+
+    Raises:
+        ValidationError: If inputs are invalid numeric types
+    """
+    try:
+        num = validate_numeric_value(numerator, f"{param_name}_numerator")
+        den = validate_numeric_value(denominator, f"{param_name}_denominator")
+
+        if abs(den) < 1e-10:  # Check for near-zero denominator
+            return default_value
+
+        return num / den
+
+    except (ValidationError, TypeError, ValueError):
+        # If validation fails, return default value
+        return default_value
+
+
+def safe_array_operation(operation_func: callable, array: Any, *args, **kwargs) -> np.ndarray:
+    """
+    Safely perform numpy array operations with type validation.
+
+    Args:
+        operation_func: Function to apply to the array
+        array: Input array
+        *args: Additional arguments for operation_func
+        **kwargs: Additional keyword arguments for operation_func
+
+    Returns:
+        np.ndarray: Result of operation
+
+    Raises:
+        ValidationError: If array is invalid or operation fails
+    """
+    # Validate input array
+    validated_array = validate_numeric_sequence(array)
+
+    try:
+        result = operation_func(validated_array, *args, **kwargs)
+
+        # Validate result is also numeric
+        if isinstance(result, np.ndarray):
+            if np.any(np.isnan(result)) or np.any(np.isinf(result)):
+                raise ValidationError("Array operation produced NaN or infinite values")
+
+        return result
+
+    except Exception as e:
+        raise ValidationError(f"Array operation failed: {str(e)}")
+
+
+def validate_arithmetic_inputs(*arrays, **scalars) -> None:
+    """
+    Validate multiple arrays and scalars for arithmetic operations.
+
+    Args:
+        *arrays: Variable number of arrays to validate
+        **scalars: Variable number of scalars to validate (name=value)
+
+    Raises:
+        ValidationError: If any input is invalid
+    """
+    # Validate all arrays
+    for i, array in enumerate(arrays):
+        validate_numeric_sequence(array, f"array_{i+1}")
+
+    # Validate all scalars
+    for name, value in scalars.items():
+        validate_numeric_value(value, name)
+
+
+# Decorator for automatic type validation of arithmetic functions
+def validate_arithmetic_operation(*array_params: str, **scalar_params: str):
+    """
+    Decorator to automatically validate arithmetic function parameters.
+
+    Args:
+        *array_params: Names of parameters that should be numeric arrays
+        **scalar_params: Names of parameters that should be numeric scalars
+
+    Usage:
+        @validate_arithmetic_operation('sequence1', 'sequence2', base_confidence='scalar')
+        def my_function(sequence1, sequence2, base_confidence=0.5):
+            return sequence1 + sequence2 * base_confidence
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            # Get function signature
+            sig = inspect.signature(func)
+            bound_args = sig.bind(*args, **kwargs)
+            bound_args.apply_defaults()
+
+            # Validate array parameters
+            for param_name in array_params:
+                if param_name in bound_args.arguments:
+                    validate_numeric_sequence(
+                        bound_args.arguments[param_name],
+                        param_name
+                    )
+
+            # Validate scalar parameters
+            for param_name, param_type in scalar_params.items():
+                if param_name in bound_args.arguments:
+                    if param_type == 'confidence':
+                        validate_confidence_range(
+                            bound_args.arguments[param_name],
+                            param_name
+                        )
+                    elif param_type == 'positive':
+                        validate_positive_numeric(
+                            bound_args.arguments[param_name],
+                            param_name
+                        )
+                    else:
+                        validate_numeric_value(
+                            bound_args.arguments[param_name],
+                            param_name
+                        )
+
+            # Call the original function
+            return func(*args, **kwargs)
 
         return wrapper
     return decorator

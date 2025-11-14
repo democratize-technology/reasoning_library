@@ -13,6 +13,15 @@ import numpy.typing as npt
 
 from .core import ReasoningChain, curry, tool_spec
 from .exceptions import ValidationError, TimeoutError
+from .validation import (
+    validate_numeric_sequence,
+    validate_numeric_value,
+    validate_confidence_range,
+    validate_sequence_length,
+    safe_divide,
+    safe_array_operation,
+    validate_arithmetic_operation
+)
 from .constants import (
     # Performance optimization constants
     LARGE_SEQUENCE_THRESHOLD,
@@ -251,6 +260,7 @@ def _calculate_pattern_quality_score(
     return PATTERN_QUALITY_DEFAULT_UNKNOWN  # Default for unknown pattern types
 
 
+@validate_arithmetic_operation('values')
 def _calculate_pattern_quality_score_optimized(
     values: Union[npt.NDArray[np.floating[Any]], List[float]],
     pattern_type: str
@@ -385,6 +395,7 @@ def _calculate_pattern_quality_score_original(
     return PATTERN_QUALITY_DEFAULT_UNKNOWN  # Default for unknown pattern types
 
 
+@validate_arithmetic_operation('differences', sequence_length='positive', base_confidence='confidence')
 def _calculate_arithmetic_confidence(
     differences: np.ndarray,
     sequence_length: int,
@@ -404,15 +415,7 @@ def _calculate_arithmetic_confidence(
     Raises:
         ValidationError: If inputs are None or invalid
     """
-    # Input validation to prevent None crashes
-    if differences is None:
-        raise ValidationError("differences array cannot be None")
-
-    if sequence_length is None:
-        raise ValidationError("sequence_length cannot be None")
-
-    if base_confidence is None:
-        raise ValidationError("base_confidence cannot be None")
+    # Comprehensive type validation is now handled by the decorator
 
     data_sufficiency_factor = _assess_data_sufficiency(sequence_length, "arithmetic")
 
@@ -431,6 +434,7 @@ def _calculate_arithmetic_confidence(
     return min(CONFIDENCE_MAX, max(CONFIDENCE_MIN, confidence))
 
 
+@validate_arithmetic_operation('ratios', sequence_length='positive', base_confidence='confidence')
 def _calculate_geometric_confidence(
     ratios: List[float], sequence_length: int, base_confidence: float = BASE_CONFIDENCE_GEOMETRIC
 ) -> float:
@@ -448,15 +452,7 @@ def _calculate_geometric_confidence(
     Raises:
         ValidationError: If inputs are None or invalid
     """
-    # Input validation to prevent None crashes
-    if ratios is None:
-        raise ValidationError("ratios list cannot be None")
-
-    if sequence_length is None:
-        raise ValidationError("sequence_length cannot be None")
-
-    if base_confidence is None:
-        raise ValidationError("base_confidence cannot be None")
+    # Comprehensive type validation is now handled by the decorator
 
     data_sufficiency_factor = _assess_data_sufficiency(sequence_length, "geometric")
 
@@ -497,6 +493,7 @@ def _validate_basic_sequence_input(sequence: List[float]) -> None:
         raise ValidationError("Sequence cannot be empty")
 
 
+@validate_arithmetic_operation('sequence', rtol='scalar', atol='scalar')
 def _check_arithmetic_progression(
     sequence: List[float],
     rtol: float,
@@ -514,6 +511,10 @@ def _check_arithmetic_progression(
         Tuple[Optional[float], Optional[float], Optional[str]]:
             (predicted_value, confidence, description) or (None, None, None)
     """
+    # Additional type validation for tolerance parameters
+    validate_numeric_value(rtol, "rtol")
+    validate_numeric_value(atol, "atol")
+
     diffs = np.diff(sequence)
     if len(diffs) > 0 and np.allclose(diffs, diffs[0], rtol=rtol, atol=atol):
         result = float(sequence[-1] + diffs[0])
@@ -524,6 +525,7 @@ def _check_arithmetic_progression(
     return None, None, None
 
 
+@validate_arithmetic_operation('sequence', rtol='scalar', atol='scalar')
 def _check_geometric_progression(
     sequence: List[float],
     rtol: float,
@@ -541,6 +543,10 @@ def _check_geometric_progression(
         Tuple[Optional[float], Optional[float], Optional[str]]:
             (predicted_value, confidence, description) or (None, None, None)
     """
+    # Additional type validation for tolerance parameters
+    validate_numeric_value(rtol, "rtol")
+    validate_numeric_value(atol, "atol")
+
     if all(s != 0 for s in sequence):
         # Vectorized calculation using NumPy for performance optimization
         sequence_array = np.array(sequence)
