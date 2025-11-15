@@ -64,3 +64,7 @@ venv.bak/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+# Security logs
+reasoning_library_security.log
+*.log
