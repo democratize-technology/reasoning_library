@@ -245,6 +245,94 @@ class TestSecurityLogIntegrity:
                    'BLOCKED' in sanitized_log, \
                 f"Sensitive data potentially exposed in logs: {sanitized_log}"
 
+    def test_sensitive_data_masking_comprehensive(self):
+        """
+        SEC-001: Comprehensive test for password and sensitive data masking.
+
+        This test verifies that the sanitize_for_logging function properly masks
+        all types of sensitive data including passwords, API keys, tokens, secrets,
+        and credentials in various formats.
+        """
+        from reasoning_library.sanitization import sanitize_for_logging
+
+        # Test cases for sensitive data masking
+        test_cases = [
+            # Basic password formats
+            ("password='secret123'", "password=[REDACTED]"),
+            ('password="secret123"', "password=[REDACTED]"),
+            ("password=secret123", "password=[REDACTED]"),
+            ("password=secret123_with_underscores", "password=[REDACTED]"),
+
+            # API key formats
+            ("api_key=abc123def456", "api_key=[REDACTED]"),
+            ("api-key='xyz789'", "api-key=[REDACTED]"),
+            ("apikey=token123", "apikey=[REDACTED]"),
+
+            # Token formats
+            ("token=jwt_token_abc123", "token=[REDACTED]"),
+            ("token='bearer_token_xyz'", "token=[REDACTED]"),
+            ("auth_token=secret_token", "auth_token=[REDACTED]"),
+
+            # Secret formats
+            ("secret=my_hidden_secret", "secret=[REDACTED]"),
+            ("secret='super_secret_value'", "secret=[REDACTED]"),
+            ("client_secret=confidential_data", "client_secret=[REDACTED]"),
+
+            # Credential formats
+            ("credentials=user_pass_123", "credentials=[REDACTED]"),
+            ("credential=admin_pass_456", "credential=[REDACTED]"),
+            ("user_credentials=sensitive_info", "user_credentials=[REDACTED]"),
+
+            # Mixed case and spacing
+            ("PASSWORD = 'secret123'", "PASSWORD = [REDACTED]"),
+            ("  API_KEY=token123  ", "API_KEY=[REDACTED]"),
+            ("Token = 'abc123'", "Token = [REDACTED]"),
+
+            # Complex real-world examples (with actual sensitive fields)
+            ("db_password=postgres://user:password@host:5432/db", "db_password=[REDACTED]"),
+            ("connection_string=server=localhost;user=admin;password=secret123;", "connection_string=server=localhost;user=admin;password=[REDACTED];"),
+
+            # Multiple sensitive fields in one string
+            ("password=secret123&api_key=token456&user=admin",
+             "password=[REDACTED]&api_key=[REDACTED]&user=admin"),
+
+            # Log entries with sensitive data
+            ("User login attempt: password='wrongpass', email=user@example.com",
+             "User login attempt: password=[REDACTED], email=user@example.com"),
+            ("API request failed: token='expired_token_123', status=401",
+             "API request failed: token=[REDACTED], status=401"),
+        ]
+
+        for input_text, expected_output in test_cases:
+            result = sanitize_for_logging(input_text, source="test_masking")
+
+            # Verify sensitive fields are masked
+            assert "[REDACTED]" in result, \
+                f"Expected [REDACTED] in output for: {input_text} - Got: {result}"
+
+            # Verify no actual sensitive data remains
+            sensitive_data_to_check = [
+                "secret123", "token456", "wrongpass", "expired_token_123",
+                "abc123def456", "xyz789", "jwt_token_abc123", "bearer_token_xyz",
+                "super_secret_value", "confidential_data", "admin_pass_456"
+            ]
+            for sensitive_value in sensitive_data_to_check:
+                assert sensitive_value not in result, \
+                    f"Actual sensitive data '{sensitive_value}' found in result: {result}"
+
+            # For simple cases, verify the structure is correct
+            if '=' in input_text and '&' not in input_text and ',' not in input_text and ';' not in input_text:
+                # Single field cases - should preserve field name
+                field_name = input_text.split('=')[0].strip()
+                if field_name.lower() in ['password', 'api_key', 'api-key', 'apikey', 'token',
+                                         'secret', 'credentials', 'credential', 'client_secret',
+                                         'auth_token', 'user_credentials', 'db_password']:
+                    # The field name should be preserved with [REDACTED] value
+                    if field_name.lower() in result.lower() and '[REDACTED]' in result:
+                        pass  # Good - field name preserved and value masked
+                    else:
+                        assert False, f"Expected field name '{field_name}' to be preserved with [REDACTED] value in result: {result}"
+
     def test_log_events_should_be_tamper_resistant(self):
         """
         MAJOR-006: Security logs should be resistant to tampering and
