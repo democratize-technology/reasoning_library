@@ -517,13 +517,32 @@ def _sanitize_input_for_concatenation(text: str) -> str:
     This function is maintained for backward compatibility only.
     New code should use sanitize_for_concatenation() directly.
 
+    CRITICAL SECURITY FIX: Enhanced with comprehensive template character removal
+    to prevent template injection bypass attacks.
+
     Args:
         text: Input text to sanitize
 
     Returns:
         str: Sanitized text safe for string concatenation
     """
-    return sanitize_for_concatenation(text, max_length=50)
+    # First apply the base sanitization
+    result = sanitize_for_concatenation(text, max_length=50)
+
+    # CRITICAL SECURITY FIX: Additional comprehensive template character removal
+    # This ensures all template injection characters are completely eliminated
+    result = re.sub(r'[{}\[\]()]', ' ', result)  # Remove all brackets and braces
+
+    # Additional safety: remove any remaining dangerous template patterns
+    result = re.sub(r'\$\{', ' ', result)  # Template start patterns
+    result = re.sub(r'\}\}', ' ', result)  # Double end braces
+    result = re.sub(r'\{\{', ' ', result)  # Double start braces
+    result = re.sub(r'#\{', ' ', result)   # Ruby-style template patterns
+
+    # Clean up extra whitespace
+    result = re.sub(r'\s+', ' ', result).strip()
+
+    return result
 
 
 def _sanitize_template_input(text: str) -> str:

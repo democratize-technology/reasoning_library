@@ -87,19 +87,29 @@ def _normalize_unicode_for_security(text: str) -> str:
     return text
 
 
-def _decode_encoded_characters(text: str) -> str:
+def _decode_encoded_characters(text: str, _recursion_depth: int = 0) -> str:
     """
     SECURITY FIX: Decode common character encodings used in bypass attempts.
 
     Detects and decodes hex, octal, and Unicode escape sequences that could
     be used to hide malicious code from simple pattern matching.
 
+    CRITICAL SECURITY FIX: After decoding, we must re-scan the text for dangerous
+    patterns that may have been revealed through decoding.
+
     Args:
         text: Input text potentially containing encoded characters
+        _recursion_depth: Internal parameter to prevent infinite recursion (DO NOT USE)
 
     Returns:
         Text with common encodings decoded for security analysis
     """
+    # SEC-002-CRITICALFIX: Prevent infinite recursion
+    if _recursion_depth > 3:  # Limit recursion depth to prevent DoS
+        return text
+
+    original_text = text  # Store original to check if decoding happened
+
     try:
         # Decode common escape patterns
         # Handle \xNN hex escapes
@@ -113,6 +123,107 @@ def _decode_encoded_characters(text: str) -> str:
     except (ValueError, OverflowError):
         # If decoding fails, return original text
         pass
+
+    # CRITICAL SECURITY FIX: After decoding, scan for newly revealed dangerous patterns
+    # This prevents bypass attacks where dangerous keywords are encoded and then decoded
+    # SEC-002-CRITICALFIX: Expanded to include standalone dangerous keywords, not just with parentheses
+    dangerous_patterns = [
+        # Function call patterns (original)
+        r'eval\s*\(',
+        r'exec\s*\(',
+        r'__import__\s*\(',
+        r'chr\s*\(\s*\d+\s*\)',
+        r'getattr\s*\(',
+        r'setattr\s*\(',
+        r'hasattr\s*\(',
+        r'globals\s*\(\)',
+        r'locals\s*\(\)',
+        r'vars\s*\(\)',
+        r'dir\s*\(',
+        r'system\s*\(',
+        r'subprocess\s*\.',
+        r'open\s*\(',
+        r'file\s*\(',
+        r'compile\s*\(',
+        # SEC-002-CRITICALFIX: Standalone dangerous keywords (prevents bypass without parentheses)
+        r'\b(eval|exec|import|compile|chr|getattr|setattr|hasattr|globals|locals|vars|dir|system|open|file)\b',
+        # Additional dangerous built-ins and functions
+        r'\b(__import__|__builtins__|__name__|__file__|__package__|__doc__|__cached__)\b',
+        r'\b(reload|help|input|raw_input|exit|quit)\b',
+        r'\b(eval|exec|compile)\s*$',  # End of line dangerous keywords
+        r'^(eval|exec|compile)\b',    # Start of line dangerous keywords
+    ]
+
+    # SEC-002-CRITICALFIX: Comprehensive second-pass security analysis after full decoding
+    # This prevents sophisticated bypass attacks where multiple encoding layers are used
+
+    # First pass: Check for dangerous patterns that may have been revealed by decoding
+    for pattern in dangerous_patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            # Block the entire text if dangerous patterns are found after decoding
+            # This is the safest approach to prevent encoded bypass attacks
+            return "[ENCODED_INJECTION_BLOCKED]"
+
+    # SEC-002-CRITICALFIX: Second pass - Additional comprehensive security analysis
+    # This catches bypass attempts that might slip through the first pass
+
+    # Check for concatenated dangerous strings (e.g., "ev" + "al")
+    concatenation_patterns = [
+        r'(ev|ex|im)\s*[\+]\s*(al|ec|port)',  # ev+al, ex+ec, im+port
+        r'["\'][ev]["\']\s*\+\s*["\'][al]["\']',  # 'ev'+'al'
+        r'["\'][e]["\']\s*\+\s*["\'][v]["\']\s*\+\s*["\'][a]["\']\s*\+\s*["\'][l]["\']',  # 'e'+'v'+'a'+'l'
+        r'["\']ev["\']\s*\+\s*["\']al["\']',  # 'ev'+'al' (exact)
+        r'["\']ex["\']\s*\+\s*["\']ec["\']',  # 'ex'+'ec' (exact)
+        r'["\']im["\']\s*\+\s*["\']port["\']',  # 'im'+'port' (exact)
+        # Enhanced patterns to catch more concatenation attempts
+        r'\b["\'][ev]["\']\s*\+\s*["\'][al]["\']\b',  # Word boundaries
+        r'\b["\'][ex]["\']\s*\+\s*["\'][ec]["\']\b',  # Word boundaries
+        r'\b["\'][im]["\']\s*\+\s*["\'][port]["\']\b',  # Word boundaries
+        # Check for dangerous concatenation with parentheses
+        r'["\'][ev]["\']\s*\+\s*["\'][al]["\']\s*\+\s*["\']?\(',  # 'ev'+'al'+'('
+        r'["\'][ex]["\']\s*\+\s*["\'][ec]["\']\s*\+\s*["\']?\(',  # 'ex'+'ec'+'('
+    ]
+
+    # Check for obfuscated dangerous patterns using various encoding tricks
+    obfuscation_patterns = [
+        r'(e|\\x65)\s*(v|\\x76)\s*(a|\\x61)\s*(l|\\x6c)',  # eval with hex mixing
+        r'(\\145|\\x65)\s*(\\166|\\x76)\s*(\\141|\\x61)\s*(\\154|\\x6c)',  # eval with octal/hex mixing
+        r'j\s*a\s*v\s*a\s*s\s*c\s*r\s*i\s*p\s*t',  # javascript obfuscation
+        r'd\s*o\s*c\s*u\s*m\s*e\s*n\s*t\s*\.\s*w\s*r\s*i\s*t\s*e',  # document.write obfuscation
+    ]
+
+    # Check all additional patterns
+    all_additional_patterns = concatenation_patterns + obfuscation_patterns
+
+    for pattern in all_additional_patterns:
+        if re.search(pattern, text, re.IGNORECASE | re.VERBOSE):
+            # Block if any obfuscation or concatenation patterns are found
+            return "[ENCODED_INJECTION_BLOCKED]"
+
+    # SEC-002-CRITICALFIX: Third pass - Check for nested encoding attempts
+    # Sometimes attackers encode multiple times to bypass simple detection
+    # Look for remaining escape sequences that might indicate multi-layer encoding
+    remaining_escape_patterns = [
+        r'\\x[0-9a-fA-F]{2}',      # Hex escapes
+        r'\\[0-7]{3}',             # Octal escapes
+        r'\\u[0-9a-fA-F]{4}',      # Unicode escapes
+        r'\\U[0-9a-fA-F]{8}',      # Long Unicode escapes
+        r'%[0-9a-fA-F]{2}',        # Percent encoding
+        r'&#[0-9]+;',              # HTML decimal entities
+        r'&#[xX][0-9a-fA-F]+;',    # HTML hex entities
+    ]
+
+    # If we find remaining escape patterns, recursively decode and check again
+    # This prevents multi-layer encoding bypasses
+    for pattern in remaining_escape_patterns:
+        if re.search(pattern, text):
+            # Recursively decode again to catch multi-layer encoding
+            redecoded_text = _decode_encoded_characters(text, _recursion_depth + 1)
+            if redecoded_text != text:  # If more decoding happened
+                # Run the security check again on the redecoded text
+                if redecoded_text == "[ENCODED_INJECTION_BLOCKED]":
+                    return "[ENCODED_INJECTION_BLOCKED]"
+                text = redecoded_text
 
     return text
 
@@ -183,17 +294,56 @@ def _get_dangerous_keyword_pattern() -> re.Pattern:
 
 @lru_cache(maxsize=None)
 def _get_template_injection_pattern() -> re.Pattern:
-    """Get template injection pattern with lazy compilation for performance optimization."""
+    """
+    ENHANCED SECURITY FIX: Comprehensive template injection pattern detection.
+
+    This pattern now includes more sophisticated template injection vectors that
+    could bypass basic detection through alternative syntax or encoding.
+    """
     return re.compile(
-        r'\$\{[^}]*\}|#\{[^}]*\}|\{\{[^}]*\}\}',
+        r'(?:'
+        r'\$\{[^}]*\}|'                    # Standard template injection ${...}
+        r'#\{[^}]*\}|'                     # Ruby style #{...}
+        r'\{\{[^}]*\}\}|'                 # Jinja2 style {{...}}
+        r'\$\{\{[^}]*\}\}|'               # Double template ${{...}}
+        r'\$\s*\{[^}]*\}|'                # Template with space ${ ...}
+        r'\$\{\s*[^}]*\s*\}|'             # Template with internal spaces ${ ... }
+        r'\{\{\s*[^}]*\s*\}\}|'           # Jinja2 with spaces {{ ... }}
+        r'#\{\s*[^}]*\s*\}|'              # Ruby style with spaces #{ ... }
+        r'\${[a-zA-Z_][a-zA-Z0-9_]*}|'    # Simple variable access ${var}
+        r'#\{[a-zA-Z_][a-zA-Z0-9_]*\}|'   # Simple Ruby variable #{var}
+        r'\{\{[a-zA-Z_][a-zA-Z0-9_]*\}\}|' # Simple Jinja2 variable {{var}}
+        r'%\([^)]*\)[sd]|'                 # Format string %(...)s %(...)d
+        r'%[0-9]*\$[sd]|'                 # Positional format %1$s %2$d
+        r'%\*[sd]|'                        # Variable width %*s %*d
+        r'%.{1,3}[sd]|'                    # Precision %.10s %.5d
+        r'T\s*\(\s*[^)]*\)\s*\.'           # Spring EL T(...).
+        r'@[^{}\s]+\{[^}]*\}'              # Custom @template{...} syntax
+        r')',
         re.IGNORECASE
     )
 
 @lru_cache(maxsize=None)
 def _get_format_string_pattern() -> re.Pattern:
-    """Get format string pattern with lazy compilation for performance optimization."""
+    """
+    ENHANCED SECURITY FIX: Comprehensive format string pattern detection.
+
+    Detects sophisticated format string attacks that could bypass basic detection
+    through complex formatting patterns or precision specifiers.
+    """
     return re.compile(
-        r'%[\d$#]*[a-zA-Z]|%\([^)]*\)[a-zA-Z]',
+        r'(?:'
+        r'%[\d$#]*[a-zA-Z]|'                     # Basic format %s %d %f etc.
+        r'%\([^)]*\)[a-zA-Z]|'                   # Named format %(name)s
+        r'%[-+0 #]*\d*(?:\.\d+)?[hlL]?[diouxXeEfFgGcs%]|'  # Complete printf format
+        r'%\*\**[a-zA-Z]|'                       # Variable width %*s %*d
+        r'%[-+0 #]*\d*\*[a-zA-Z]|'               # Variable precision %.*s
+        r'%[-+0 #]*\*\d*[a-zA-Z]|'              # Variable width argument
+        r'%\*.*?\*[a-zA-Z]|'                     # Multiple variables %*.*s
+        r'%\{[^}]*\}[sd]|'                       # Alternative syntax %{name}s
+        r'%[0-9]+?\$[a-zA-Z]|'                   # Positional argument %1$s
+        r'%[a-zA-Z]'                             # Simple format letters
+        r')',
         re.IGNORECASE
     )
 
@@ -310,9 +460,27 @@ def _get_log_injection_pattern() -> re.Pattern:
 
 @lru_cache(maxsize=None)
 def _get_nested_injection_pattern() -> re.Pattern:
-    """Get nested injection pattern with lazy compilation for performance optimization."""
+    """
+    ENHANCED SECURITY FIX: Comprehensive nested injection pattern detection.
+
+    Detects sophisticated nested injection attacks that use multiple layers
+    of encoding, concatenation, or function calls to bypass simple detection.
+    """
     return re.compile(
-        r'(?:eval|exec)\s*\(\s*(?:eval|exec|chr|concat|join|\+)',
+        r'(?:'
+        r'(?:eval|exec)\s*\(\s*(?:eval|exec|chr|concat|join|\+)|'  # eval(eval(...))
+        r'(?:eval|exec)\s*\(\s*["\'][^"\']*["\']\s*\+\s*["\'][^"\']*["\']|'  # eval('a' + 'b')
+        r'(?:eval|exec)\s*\(\s*chr\s*\(|'                          # eval(chr(...))
+        r'(?:eval|exec)\s*\(\s*["\'][^"\']*\\x[0-9a-fA-F]{2}[^"\']*["\']|'  # eval with hex
+        r'(?:eval|exec)\s*\(\s*["\'][^"\']*\\[0-7]{3}[^"\']*["\']|'          # eval with octal
+        r'(?:eval|exec)\s*\(\s*["\'][^"\']*\\u[0-9a-fA-F]{4}[^"\']*["\']|'    # eval with unicode
+        r'__import__\s*\(\s*["\'][^"\']*["\']\s*\+\s*["\'][^"\']*["\']|'       # __import__('a' + 'b')
+        r'getattr\s*\(\s*__import__|'                                 # getattr(__import__)
+        r'setattr\s*\([^,]*,\s*["\'][^"\']*["\']\s*\+\s*["\'][^"\']*["\']|' # setattr with concat
+        r'globals\s*\(\)\s*\[|'                                      # globals()[
+        r'locals\s*\(\)\s*\[|'                                       # locals()[
+        r'(?:eval|exec)\s*\(\s*\_\_\s*import\s*\_\_'                  # eval(__import__)
+        r')',
         re.IGNORECASE
     )
 
@@ -425,7 +593,22 @@ def sanitize_text_input(
     text = _normalize_unicode_for_security(text)
 
     # SECURITY FIX: Decode encoded characters to prevent hidden attacks
-    text = _decode_encoded_characters(text)
+    decoded_text = _decode_encoded_characters(text)
+    if decoded_text == "[ENCODED_INJECTION_BLOCKED]":
+        # If decoding reveals dangerous content, block immediately
+        log_security_event(
+            input_text=original_text[:200],  # Limit length for security logs
+            source=source,
+            context={
+                "function": "sanitize_text_input",
+                "level": level,
+                "attack_type": "encoded_injection_decoded",
+                "original_length": len(original_text),
+            },
+            block_action=True
+        )
+        return ""  # Return empty string instead of the blocked marker
+    text = decoded_text
 
     # Layer 1: Block dangerous keywords (enhanced patterns)
     text = _get_dangerous_keyword_pattern().sub('', text)
@@ -516,13 +699,99 @@ def sanitize_for_concatenation(text: Any, max_length: int = 50, source: str = "u
         - All special characters removed
         - Defense-in-depth approach
         - MAJOR-006: Security event logging for monitoring
+        - SEC-002-CRITICALFIX: Enhanced preprocessing to prevent URL/HTML encoding bypasses
 
     Examples:
         >>> sanitize_for_concatenation("Hello ${name}")
         'Hello name'
         >>> sanitize_for_concatenation("import os")
         ''
+        # SEC-002-CRITICALFIX examples - sophisticated bypass vectors now blocked:
+        >>> sanitize_for_concatenation("pass%77ord=secret")  # URL encoding bypass
+        ''
+        >>> sanitize_for_concatenation("passwor&#100;=secret")  # HTML entity bypass
+        ''
     """
+    if not isinstance(text, str):
+        return ""
+
+    # SEC-002-CRITICALFIX: Apply enhanced preprocessing before main sanitization
+    # This prevents URL encoding, HTML entity encoding, and other sophisticated bypasses
+    # that could circumvent sensitive data detection and pattern matching
+    text = _enhanced_preprocessing_for_bypass_prevention(text)
+
+    # SEC-002-CRITICALFIX: Check for dangerous content after preprocessing
+    # This catches sensitive data patterns that should be blocked entirely
+    if _get_sensitive_data_pattern().search(text):
+        # Log security event for sensitive data in concatenation
+        log_security_event(
+            input_text=text[:100],  # Limit length for security logs
+            source=source,
+            context={
+                "function": "sanitize_for_concatenation",
+                "attack_type": "sensitive_data_concatenation",
+                "pattern_matched": "sensitive_data_pattern"
+            },
+            block_action=True
+        )
+        return ""  # Block entirely - no sensitive data should be concatenated
+
+    # SEC-002-CRITICALFIX: Check for injection patterns early
+    # Include concatenation bypass patterns
+    dangerous_patterns = [
+        _get_dangerous_keyword_pattern(),
+        _get_template_injection_pattern(),
+        _get_nested_injection_pattern(),
+    ]
+
+    # Add concatenation bypass patterns directly
+    concatenation_bypass_patterns = [
+        # Direct string concatenation attempts
+        r"['\"]ev['\"]\s*\+\s*['\"]al['\"]",
+        r"['\"]ex['\"]\s*\+\s*['\"]ec['\"]",
+        r"['\"]im['\"]\s*\+\s*['\"]port['\"]",
+        # With parentheses
+        r"['\"]ev['\"]\s*\+\s*['\"]al['\"]\s*\+\s*['\"]?\(",
+        r"['\"]ex['\"]\s*\+\s*['\"]ec['\"]\s*\+\s*['\"]?\(",
+        # More complex concatenation
+        r"['\"]e['\"]\s*\+\s*['\"]v['\"]\s*\+\s*['\"]a['\"]\s*\+\s*['\"]l['\"]",
+    ]
+
+    for pattern in concatenation_bypass_patterns:
+        dangerous_patterns.append(re.compile(pattern, re.IGNORECASE))
+
+    if any(pattern.search(text) for pattern in dangerous_patterns):
+        # Log security event for injection attempt
+        log_security_event(
+            input_text=text[:100],  # Limit length for security logs
+            source=source,
+            context={
+                "function": "sanitize_for_concatenation",
+                "attack_type": "injection_attempt",
+                "pattern_matched": "injection_pattern"
+            },
+            block_action=True
+        )
+        return ""  # Block entirely
+
+    # SEC-002-CRITICALFIX: Check for encoded content before it goes through normal sanitization
+    # This prevents content that was decoded and blocked from slipping through
+    decoded_text = _decode_encoded_characters(text)
+    if decoded_text == "[ENCODED_INJECTION_BLOCKED]":
+        # Log security event for encoded injection attempt
+        log_security_event(
+            input_text=text[:100],  # Limit length for security logs
+            source=source,
+            context={
+                "function": "sanitize_for_concatenation",
+                "attack_type": "encoded_injection_attempt",
+                "pattern_matched": "encoded_injection"
+            },
+            block_action=True
+        )
+        return ""  # Block entirely
+
+    # Continue with normal sanitization for non-critical content
     return sanitize_text_input(
         text=text,
         max_length=max_length,
