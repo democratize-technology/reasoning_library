@@ -11,6 +11,7 @@ from reasoning_library.sanitization import (
     sanitize_text_input,
     sanitize_for_concatenation,
     sanitize_for_display,
+    sanitize_for_logging,
     SanitizationLevel
 )
 
@@ -150,8 +151,8 @@ def test_format_string_bypass():
         "%{user_input}s",  # Alternative syntax
         "%1$s",  # Positional format
         "%(name)s %(value)d",  # Multiple named formats
-        "{user_input}".format(user_input="value"),  # .format() method
-        f"{user_input}",  # f-string (though this would be executed before sanitization)
+        "{test}".format(test="value"),  # .format() method
+        "{placeholder}",  # placeholder (f-strings execute before sanitization)
         "%.100s",  # Precision format
         "%*.*s",  # Variable precision
         "%c%c%c%c",  # Character format (can build strings)
