@@ -222,6 +222,13 @@ def _extract_keywords(text: str) -> List[str]:
     """
     Extract relevant keywords from text for hypothesis generation with ReDoS protection.
 
+    THREAD SAFETY: This function is completely thread-safe:
+    - Uses immutable frozensets for shared constants (COMMON_WORDS, LESS_INFORMATIVE_WORDS)
+    - All mutable data is local to the function call
+    - No shared state across threads
+    - Pre-compiled regex pattern is thread-safe
+    - No external dependencies that could cause race conditions
+
     Args:
         text (str): Text to analyze
 
@@ -255,17 +262,20 @@ def _extract_keywords(text: str) -> List[str]:
     # Pattern [a-zA-Z0-9]{1,50} prevents backtracking and limits word length to 50 chars
     words = KEYWORD_EXTRACTION_PATTERN.findall(text.lower())
 
-    # Use thread-safe shared constants for filtering
+    # THREAD SAFETY: All operations below use only local variables, no shared state
+    # Use thread-safe shared constants for filtering (immutable frozensets)
     keywords = [word for word in words if word not in COMMON_WORDS and len(word) > MIN_KEYWORD_LENGTH]
     keywords = [word for word in keywords if word not in LESS_INFORMATIVE_WORDS]
 
+    # THREAD SAFETY: Local mutable data structures, no sharing across threads
     unique_keywords = []
-    seen = set()
+    seen = set()  # Local set, safe for concurrent access
     for word in keywords:
         if word not in seen:
             seen.add(word)
             unique_keywords.append(word)
 
+    # THREAD SAFETY: Sorting uses only local data, no external dependencies
     unique_keywords.sort(key=lambda w: (-len(w), keywords.index(w)))
 
     # SECURITY: Additional safety limit to prevent DoS through keyword explosion
@@ -344,30 +354,36 @@ def _extract_keywords_with_context(
     }
 
 
-# Domain - specific templates for hypothesis generation
+# Thread-safe immutable domain templates for hypothesis generation
 # Each domain contains:
-# - keywords: List of keywords that trigger this domain
-# - templates: List of template strings with {action}, {component},
-#   and {issue} placeholders
+# - keywords: Tuple of keywords that trigger this domain (immutable)
+# - templates: Tuple of template strings with {action}, {component},
+#   and {issue} placeholders (immutable)
+#
+# THREAD SAFETY: This structure is designed to be completely thread-safe:
+# - All inner collections are tuples (immutable)
+# - Top-level dictionary is read-only after initialization
+# - No modifications are performed at runtime
+# - Safe for concurrent access without locks
 DOMAIN_TEMPLATES = {
     "debugging": {
-        "keywords": [
+        "keywords": (
             "deploy", "code", "server", "database", "cpu", "memory", "slow", "error"
-        ],
-        "templates": [
+        ),
+        "templates": (
             "{action} introduced {issue} in {component}",
             "{component} experiencing {issue} due to {action}",
             "Performance regression in {component} from {action} causing {issue}",
             "{action} causing {component} resource exhaustion due to {issue}",
-        ]
+        )
     },
     "system": {
-        "keywords": ["connection", "network", "timeout", "latency", "load"],
-        "templates": [
+        "keywords": ("connection", "network", "timeout", "latency", "load"),
+        "templates": (
             "Network or connection {issue} affecting {component}",
             "Load balancing problem causing {issue} in {component}",
             "{component} contention due to {action} causing {issue}"
-        ]
+        )
     }
 }
 
